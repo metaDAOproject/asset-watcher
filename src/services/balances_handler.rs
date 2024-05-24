@@ -15,17 +15,17 @@ impl BalancesHandler {
     }
 
     pub fn handle_token_acct_change(&self, record: TokenAcct, msg: &str) {
-        let parsed_msg: Value = serde_json::from_str(msg).expect("Failed to parse JSON");
-        let new_amount = parsed_msg["params"]["result"]["value"]["amount"]
-            .as_i64()
-            .expect("Failed to get amount");
+        // let parsed_msg: Value = serde_json::from_str(msg).expect("Failed to parse JSON");
+        // let new_amount = parsed_msg["params"]["result"]["value"]["amount"]
+        //     .as_i64()
+        //     .expect("Failed to get amount");
 
-        let now = SystemTime::now();
+        // let now = SystemTime::now();
 
-        let connection_clone = Arc::clone(&self.connection);
-        diesel::update(token_accts.filter(token_acct.eq(record.token_acct)))
-            .set(amount.eq(new_amount))
-            .execute(&mut *connection_clone);
+        // let connection_clone = Arc::clone(&self.connection);
+        // diesel::update(token_accts.filter(token_acct.eq(record.token_acct)))
+        //     .set(amount.eq(new_amount))
+        //     .execute(&mut *connection_clone);
 
         // Insert a new row into the TokenAcctBalances table
         // let new_balance = NewTokenAcctBalances {

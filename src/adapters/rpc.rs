@@ -1,6 +1,8 @@
 use futures_util::{SinkExt, StreamExt};
+use http::Request;
 use serde_json::json;
 use tokio::net::TcpStream;
+use tokio_tungstenite::tungstenite::handshake::client::generate_key;
 use tokio_tungstenite::tungstenite::protocol::Message;
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::{connect_async, MaybeTlsStream};
@@ -10,12 +12,25 @@ pub struct SolanaRpcClient {
 }
 
 impl SolanaRpcClient {
-    pub async fn new(url: &str) -> Self {
-        let (socket, _) = connect_async(url).await.expect("Failed to connect");
-        SolanaRpcClient { socket }
+    pub async fn new(url: &str) -> Result<Self, String> {
+        let parsed_url = url::Url::parse(url).unwrap();
+        let request = Request::builder()
+            .uri(parsed_url.to_string())
+            .header("sec-websocket-key", generate_key())
+            .header("host", "devnet-local.themetadao-org.workers.dev")
+            .header("upgrade", "websocket")
+            .header("connection", "upgrade")
+            .header("sec-websocket-version", 13)
+            .body(())
+            .unwrap();
+        let connection_res = connect_async(request).await;
+        match connection_res {
+            Ok((socket, _)) => Ok(SolanaRpcClient { socket }),
+            Err(e) => Err(format!("error connecting RPC {:?}", e)),
+        }
     }
 
-    pub async fn on_account_change<F>(&mut self, acct: &str, callback: F)
+    pub async fn on_account_change<F>(&mut self, acct: String, callback: F)
     where
         F: Fn(String) + Send + 'static,
     {

@@ -6,7 +6,7 @@ table! {
         mint_acct -> Varchar,
         owner_acct -> Varchar,
         amount -> Int8,
-        updated_at -> Timestamp,
+        updated_at -> Nullable<Timestamp>,
     }
 }
 
@@ -16,5 +16,5 @@ pub struct TokenAcct {
     pub mint_acct: String,
     pub owner_acct: String,
     pub amount: i64,
-    pub updated_at: SystemTime,
+    pub updated_at: Option<SystemTime>,
 }
