@@ -1,11 +1,11 @@
 use std::time::SystemTime;
 
 table! {
-    token_accts (token_acct) {
+    token_acct_balances (token_acct) {
         token_acct -> Varchar,
         mint_acct -> Varchar,
         owner_acct -> Varchar,
-        amount -> Int8,
+        amount -> Float,
         created_at -> Timestamp,
     }
 }
@@ -15,6 +15,16 @@ pub struct TokenAcctBalances {
     pub token_acct: String,
     pub mint_acct: String,
     pub owner_acct: String,
-    pub amount: i64,
+    pub amount: f32,
+    pub created_at: SystemTime,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = token_acct_balances)]
+pub struct TokenAcctBalancesRecord {
+    pub token_acct: String,
+    pub mint_acct: String,
+    pub owner_acct: String,
+    pub amount: f32,
     pub created_at: SystemTime,
 }

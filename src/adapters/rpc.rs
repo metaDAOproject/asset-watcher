@@ -37,11 +37,14 @@ impl SolanaRpcClient {
         let message = serde_json::to_string(&json!({
             "jsonrpc": "2.0",
             "id": 1,
-            "method": "onAccountChange",
-            "params": {
-                "account": acct,
-                "commitment": "finalized"
-            }
+            "method": "accountSubscribe",
+            "params": [
+                acct,
+                {
+                    "encoding": "jsonParsed",
+                    "commitment": "finalized"
+                }
+            ]
         }))
         .unwrap();
 

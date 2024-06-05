@@ -5,15 +5,17 @@ extern crate dotenv;
 use adapters::rpc::SolanaRpcClient;
 use diesel::prelude::*;
 use dotenv::dotenv;
+use solana_account_decoder::UiAccount;
+use solana_client::{pubsub_client::PubsubClientSubscription, rpc_response::Response};
 use std::env;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::{signal, sync::Mutex};
 mod entities;
 use entities::token_accts::{token_accts::dsl::*, TokenAcct};
 mod adapters;
 mod services;
 use deadpool_diesel::postgres::{Manager, Pool, Runtime};
-// use services::balances_handler::BalancesHandler;
+use hex::FromHex;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -34,51 +36,74 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let results = conn_manager
         .interact(|conn| {
             return token_accts
+                .filter(owner_acct.eq("HwBL75xHHKcXSMNcctq3UqWaEJPDWVQz6NazZJNjWaQc"))
                 .load::<TokenAcct>(conn)
                 .expect("Error loading token_accts");
         })
         .await?;
 
-    // let results = token_accts
-    //     .load::<TokenAcct>(other_connection)
-    //     .expect("Error loading token_accts");
-
+    let mut rpc_subs: Vec<PubsubClientSubscription<Response<UiAccount>>> = vec![];
     for record in results {
-        let rpc_clone = Arc::clone(&rpc_client_arc);
-        let pool_clone = pool.clone();
-        tokio::spawn(async move {
-            let token_acct_clone = record.token_acct.clone();
-            let mut rpc_client = rpc_clone.lock().await;
-            rpc_client
-                .on_account_change(token_acct_clone.clone(), move |msg| {
-                    let parsed_msg: serde_json::Value =
-                        serde_json::from_str(msg.as_str()).expect("Failed to parse JSON");
-                    let new_amount = parsed_msg["params"]["result"]["value"]["amount"]
-                        .as_i64()
-                        .expect("Failed to get amount");
+        // let token_acct_addr = record.token_acct.clone();
+        // tokio::spawn(async move {
+        //     let token_acct_clone = record.token_acct.clone();
+        //     let mut rpc_client = rpc_clone.lock().await;
+        //     rpc_client
+        //         .on_account_change(token_acct_clone.clone(), move |msg| {
+        //             let parsed_msg: serde_json::Value =
+        //                 serde_json::from_str(msg.as_str()).expect("Failed to parse JSON");
+        //             println!("{:?}", parsed_msg);
+        //             let new_amount = parsed_msg["params"]["result"]["value"]["amount"]
+        //                 .as_f64()
+        //                 .expect("Failed to get amount");
 
-                    let pool_clone_inner = pool_clone.clone();
-                    let token_acct_inner = token_acct_clone.clone();
-                    tokio::spawn(async move {
-                        let new_conn_inner = pool_clone_inner
-                            .get()
-                            .await
-                            .expect("Failed to get connection from pool");
-                        let update_res = new_conn_inner
-                            .interact(move |conn| {
-                                diesel::update(token_accts.filter(token_acct.eq(token_acct_inner)))
-                                    .set(amount.eq(new_amount))
-                                    .execute(conn)
-                            })
-                            .await
-                            .expect("Failed to update token_accts");
+        //             let pool_clone_inner = pool_clone.clone();
+        //             let token_acct_inner = token_acct_clone.clone();
+        //             let connection = pool_clone_inner.get();
+        //             balances_handler::handle_token_acct_change()
+        //             tokio::spawn(async move {
+        //                 let new_conn_inner = pool_clone_inner
+        //                     .get()
+        //                     .await
+        //                     .expect("Failed to get connection from pool");
+        //                 let update_res = new_conn_inner
+        //                     .interact(move |conn| {
+        //                         diesel::update(token_accts.filter(token_acct.eq(token_acct_inner)))
+        //                             .set(amount.eq(new_amount))
+        //                             .execute(conn)
+        //                     })
+        //                     .await
+        //                     .expect("Failed to update token_accts");
 
-                        println!("updated token_accts = {:?}", update_res);
-                    });
-                })
-                .await;
-        });
+        //                 println!("updated token_accts = {:?}", update_res);
+        //             });
+        //         })
+        //         .await;
+        // });
+
+        match string_to_u8_32(&record.token_acct) {
+            Ok(array) => {
+                let token_acct_pubkey = solana_program::pubkey::Pubkey::from(array);
+                let (subscription, receiver) =
+                    solana_client::pubsub_client::PubsubClient::account_subscribe(
+                        &rpc_endpoint_ws,
+                        &token_acct_pubkey,
+                        None,
+                    )?;
+                for val in receiver.iter() {
+                    let ui_account: UiAccount = val.value;
+                    let account_data = ui_account.data.decode();
+                    // how to decode the solana token balance account in rusty here
+                }
+                rpc_subs.push(subscription);
+            }
+            Err(e) => eprintln!("Error with token acct pubkey parsing: {}", e),
+        }
     }
+
+    // Block the main function and handle CTRL+C
+    signal::ctrl_c().await?;
+    println!("Received CTRL+C, shutting down.");
     Ok(())
 }
 
@@ -86,4 +111,9 @@ pub fn establish_connection() -> PgConnection {
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     PgConnection::establish(&database_url)
         .unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
+}
+
+fn string_to_u8_32(input: &str) -> Result<[u8; 32], Box<dyn std::error::Error>> {
+    let bytes = <[u8; 32]>::from_hex(input)?;
+    Ok(bytes)
 }
