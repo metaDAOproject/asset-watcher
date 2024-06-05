@@ -326,6 +326,7 @@ name = "asset-watcher"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "bs58 0.5.1",
  "deadpool",
  "deadpool-diesel",
  "diesel",
@@ -339,6 +340,7 @@ dependencies = [
  "solana-account-decoder",
  "solana-client",
  "solana-program",
+ "solana-sdk",
  "tokio",
  "tokio-tungstenite 0.21.0",
  "url",
@@ -657,6 +659,15 @@ name = "bs58"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "771fe0050b883fcc3ea2359b1a96bcfbc090b7116eae7c3c512c7a083fdf23d3"
+
+[[package]]
+name = "bs58"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf88ba1141d185c399bee5288d850d63b8369520c1eafc32a0430b5b6c287bf4"
+dependencies = [
+ "tinyvec",
+]
 
 [[package]]
 name = "bumpalo"
@@ -3324,7 +3335,7 @@ dependencies = [
  "Inflector",
  "base64 0.21.7",
  "bincode",
- "bs58",
+ "bs58 0.4.0",
  "bv",
  "lazy_static",
  "serde",
@@ -3433,7 +3444,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c00a6aca244dfa904e2c4a26406ba7b0987344ceaec932f3cda0b35eff0babc"
 dependencies = [
  "block-buffer 0.10.4",
- "bs58",
+ "bs58 0.4.0",
  "bv",
  "either",
  "generic-array",
@@ -3567,7 +3578,7 @@ dependencies = [
  "borsh 0.10.3",
  "borsh 0.9.3",
  "borsh 1.5.0",
- "bs58",
+ "bs58 0.4.0",
  "bv",
  "bytemuck",
  "cc",
@@ -3723,7 +3734,7 @@ dependencies = [
  "async-trait",
  "base64 0.21.7",
  "bincode",
- "bs58",
+ "bs58 0.4.0",
  "indicatif",
  "log",
  "reqwest",
@@ -3747,7 +3758,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0aea25d581de77ba256b81f4ebd8d963b85ec01d70a74829365e85f6403d497"
 dependencies = [
  "base64 0.21.7",
- "bs58",
+ "bs58 0.4.0",
  "jsonrpc-core",
  "reqwest",
  "semver",
@@ -3786,7 +3797,7 @@ dependencies = [
  "bincode",
  "bitflags 2.5.0",
  "borsh 1.5.0",
- "bs58",
+ "bs58 0.4.0",
  "bytemuck",
  "byteorder",
  "chrono",
@@ -3836,7 +3847,7 @@ version = "1.18.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95ef2ea49002d1bf52a4a8509570b2c3b88e7b6d0a131b11bbd637ca1e1df0ff"
 dependencies = [
- "bs58",
+ "bs58 0.4.0",
  "proc-macro2",
  "quote",
  "rustversion",
@@ -3931,7 +3942,7 @@ dependencies = [
  "base64 0.21.7",
  "bincode",
  "borsh 0.10.3",
- "bs58",
+ "bs58 0.4.0",
  "lazy_static",
  "log",
  "serde",

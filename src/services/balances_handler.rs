@@ -12,7 +12,7 @@ use std::time::SystemTime;
 pub async fn handle_token_acct_change(
     connection: Object<Manager<PgConnection>>,
     record: TokenAcct,
-    new_amount: f32,
+    new_amount: f64,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // let parsed_msg: Value = serde_json::from_str(msg).expect("Failed to parse JSON");
     // let new_amount = parsed_msg["params"]["result"]["value"]["amount"]
