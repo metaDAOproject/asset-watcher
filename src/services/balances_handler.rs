@@ -40,7 +40,11 @@ pub fn handle_token_acct_change(
         .execute(connection)
         .expect("Error inserting into token_acct_balances");
 
-    diesel::update(token_accts::table.filter(token_acct.eq(record.token_acct)))
+    let now = SystemTime::now();
+    let mut token_balance: TokenAcct = record;
+    token_balance.amount = amount_scaled;
+    token_balance.updated_at = Some(now);
+    diesel::update(token_accts::table.filter(token_acct.eq(token_balance.token_acct.clone())))
         .set(amount.eq(amount_scaled))
         .execute(connection)
         .expect("Error updating token_accts");

@@ -15,36 +15,48 @@ mod entities;
 use entities::token_accts::{token_accts::dsl::*, TokenAcct};
 mod adapters;
 mod services;
-use deadpool_diesel::postgres::{Manager, Pool, Runtime};
+use deadpool::managed::Object;
+use deadpool_diesel::postgres::{Pool, Runtime};
+use deadpool_diesel::Manager;
 use futures_util::StreamExt;
 use std::str::FromStr;
+
+async fn get_database_pool(
+) -> Result<Arc<Object<Manager<PgConnection>>>, Box<dyn std::error::Error>> {
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let manager = Manager::new(database_url, Runtime::Tokio1);
+    let pool = Pool::builder(manager).max_size(8).build()?;
+    let conn_manager = pool.get().await?;
+    Ok(Arc::new(conn_manager))
+}
+
+async fn get_pubsub_client(
+) -> Result<Arc<solana_client::nonblocking::pubsub_client::PubsubClient>, Box<dyn std::error::Error>>
+{
+    let rpc_endpoint_ws = env::var("RPC_ENDPOINT_WSS").expect("RPC_ENDPOINT_WSS must be set");
+    let pub_sub_client =
+        solana_client::nonblocking::pubsub_client::PubsubClient::new(&rpc_endpoint_ws).await?;
+    Ok(Arc::new(pub_sub_client))
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
 
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let manager = Manager::new(database_url, Runtime::Tokio1);
-    let pool = Pool::builder(manager).max_size(8).build()?;
-    let conn_manager = pool.get().await?;
-    let conn_manager_arc = Arc::new(conn_manager);
-
-    let rpc_endpoint_ws = env::var("RPC_ENDPOINT_WSS").expect("RPC_ENDPOINT_WSS must be set");
+    let conn_manager_arc = get_database_pool().await?;
 
     let results = conn_manager_arc
         .clone()
         .interact(|conn| {
+            // TODO: add a status on token_accts to show which ones are still being indexed and which ones are not
             return token_accts
-                .filter(owner_acct.eq("HwBL75xHHKcXSMNcctq3UqWaEJPDWVQz6NazZJNjWaQc"))
                 .load::<TokenAcct>(conn)
                 .expect("Error loading token_accts");
         })
         .await?;
 
     // let mut rpc_subs: Vec<PubsubClientSubscription<Response<UiAccount>>> = vec![];
-    let pub_sub_client = Arc::new(
-        solana_client::nonblocking::pubsub_client::PubsubClient::new(&rpc_endpoint_ws).await?,
-    );
+    let pub_sub_client = get_pubsub_client().await?;
     for record in results {
         match Pubkey::from_str(&record.token_acct) {
             Ok(token_acct_pubkey) => {
@@ -76,6 +88,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                             UiAccountData::Json(data) => {
                                 let record_clone = record.clone();
+                                let token_acct_clone = record_clone.token_acct.clone();
                                 let token_acct_update_res = conn_manager_arg_clone
                                     .interact(move |conn| {
                                         return handle_token_acct_change(conn, record_clone, data);
@@ -83,7 +96,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     .await;
                                 match token_acct_update_res {
                                     Ok(res) => match res {
-                                        Ok(ok) => println!("{:?}", ok),
+                                        Ok(_) => println!(
+                                            "successfully updated token balance: {:?}",
+                                            token_acct_clone
+                                        ),
                                         Err(e) => println!("error kind: {:?}", e),
                                     },
                                     Err(e) => println!("interact error: {:?}", e),
