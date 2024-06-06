@@ -3,47 +3,46 @@ use crate::entities::token_acct_balances::TokenAcctBalancesRecord;
 use crate::entities::token_accts::token_accts;
 use crate::entities::token_accts::token_accts::dsl::*;
 use crate::entities::token_accts::TokenAcct;
-use deadpool::managed::Object;
-use deadpool_diesel::Manager;
 use diesel::prelude::*;
 use diesel::PgConnection;
+use solana_account_decoder::parse_account_data::ParsedAccount;
+use std::io::ErrorKind;
 use std::time::SystemTime;
 
-pub async fn handle_token_acct_change(
-    connection: Object<Manager<PgConnection>>,
+pub fn handle_token_acct_change(
+    connection: &mut PgConnection,
     record: TokenAcct,
-    new_amount: f64,
-) -> Result<(), Box<dyn std::error::Error>> {
-    // let parsed_msg: Value = serde_json::from_str(msg).expect("Failed to parse JSON");
-    // let new_amount = parsed_msg["params"]["result"]["value"]["amount"]
-    //     .as_i64()
-    //     .expect("Failed to get amount");
+    updated_token_account: ParsedAccount,
+) -> Result<(), ErrorKind> {
+    let token_amount = updated_token_account
+        .parsed
+        .as_object()
+        .unwrap()
+        .get("info")
+        .unwrap()
+        .get("tokenAmount")
+        .unwrap();
+    let new_amount = token_amount.get("uiAmount").unwrap().as_f64().unwrap();
+    let decimals = token_amount.get("decimals").unwrap().as_f64().unwrap();
 
-    // let now = SystemTime::now();
+    let amount_scaled = new_amount * 10f64.powf(decimals);
 
-    // let connection_clone = Arc::clone(&self.connection);
-
-    // Insert a new row into the TokenAcctBalances table
     let new_balance = TokenAcctBalancesRecord {
         token_acct: record.token_acct.clone(),
         mint_acct: record.mint_acct.clone(),
         owner_acct: record.owner_acct.clone(),
-        amount: new_amount,
+        amount: amount_scaled,
         created_at: SystemTime::now(),
     };
 
-    connection
-        .interact(move |conn| {
-            diesel::insert_into(token_acct_balances::table)
-                .values(new_balance)
-                .execute(conn)
-                .expect("Error inserting into token_acct_balances");
+    diesel::insert_into(token_acct_balances::table)
+        .values(new_balance)
+        .execute(connection)
+        .expect("Error inserting into token_acct_balances");
 
-            diesel::update(token_accts::table.filter(token_acct.eq(record.token_acct)))
-                .set(amount.eq(new_amount))
-                .execute(conn)
-                .expect("Error updating token_accts");
-        })
-        .await?;
+    diesel::update(token_accts::table.filter(token_acct.eq(record.token_acct)))
+        .set(amount.eq(amount_scaled))
+        .execute(connection)
+        .expect("Error updating token_accts");
     Ok(())
 }

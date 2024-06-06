@@ -4,20 +4,19 @@ extern crate dotenv;
 
 use diesel::prelude::*;
 use dotenv::dotenv;
-use solana_account_decoder::{parse_token::UiTokenAmount, UiAccount, UiAccountEncoding};
-use solana_client::nonblocking::{
-    pubsub_client::PubsubClientSubscription, rpc_config::RpcAccountInfoConfig,
-    rpc_response::Response,
-};
+use services::balances_handler::handle_token_acct_change;
+use solana_account_decoder::{UiAccount, UiAccountData};
+use solana_client::rpc_config::RpcAccountInfoConfig;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::commitment_config::CommitmentConfig;
-use std::env;
+use std::{env, sync::Arc};
 use tokio::signal;
 mod entities;
 use entities::token_accts::{token_accts::dsl::*, TokenAcct};
 mod adapters;
 mod services;
 use deadpool_diesel::postgres::{Manager, Pool, Runtime};
+use futures_util::StreamExt;
 use std::str::FromStr;
 
 #[tokio::main]
@@ -28,15 +27,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manager = Manager::new(database_url, Runtime::Tokio1);
     let pool = Pool::builder(manager).max_size(8).build()?;
     let conn_manager = pool.get().await?;
-    // let other_connection = &mut establish_connection();
+    let conn_manager_arc = Arc::new(conn_manager);
 
     let rpc_endpoint_ws = env::var("RPC_ENDPOINT_WSS").expect("RPC_ENDPOINT_WSS must be set");
-    // let rpc_client = SolanaRpcClient::new(&rpc_endpoint_ws).await?;
-    // let rpc_client_arc = Arc::new(Mutex::new(rpc_client));
-    // let arc_connection = Arc::new(*connection);
-    // let balances_handler = BalancesHandler::new(arc_connection);
 
-    let results = conn_manager
+    let results = conn_manager_arc
+        .clone()
         .interact(|conn| {
             return token_accts
                 .filter(owner_acct.eq("HwBL75xHHKcXSMNcctq3UqWaEJPDWVQz6NazZJNjWaQc"))
@@ -45,50 +41,62 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .await?;
 
-    let mut rpc_subs: Vec<PubsubClientSubscription<Response<UiAccount>>> = vec![];
+    // let mut rpc_subs: Vec<PubsubClientSubscription<Response<UiAccount>>> = vec![];
+    let pub_sub_client = Arc::new(
+        solana_client::nonblocking::pubsub_client::PubsubClient::new(&rpc_endpoint_ws).await?,
+    );
     for record in results {
         match Pubkey::from_str(&record.token_acct) {
             Ok(token_acct_pubkey) => {
-                let (subscription, receiver) =
-                    solana_client::pubsub_client::PubsubClient::account_subscribe(
-                        &rpc_endpoint_ws,
-                        &token_acct_pubkey,
-                        Some(RpcAccountInfoConfig {
-                            encoding: None,
-                            data_slice: None,
-                            commitment: Some(CommitmentConfig::confirmed()),
-                            min_context_slot: None,
-                        }),
-                    )?;
+                let conn_manager_arg_clone = Arc::clone(&conn_manager_arc);
+                let pub_sub_client_clone = Arc::clone(&pub_sub_client);
+                tokio::spawn(async move {
+                    println!("subscribing to account {}", token_acct_pubkey.to_string());
+                    let (mut subscription, _) = pub_sub_client_clone
+                        .account_subscribe(
+                            &token_acct_pubkey,
+                            Some(RpcAccountInfoConfig {
+                                encoding: Some(
+                                    solana_account_decoder::UiAccountEncoding::JsonParsed,
+                                ),
+                                data_slice: None,
+                                commitment: Some(CommitmentConfig::confirmed()),
+                                min_context_slot: None,
+                            }),
+                        )
+                        .await
+                        .expect("Failed to subscribe to account");
 
-                loop {
-                    match subscription. {
-                        Ok(response) => {
-                            println!("account subscription response: {:?}", response);
-                        }
-                        Err(e) => {
-                            println!("account subscription error: {:?}", e);
-                            break;
+                    while let Some(val) = subscription.next().await {
+                        let ui_account: UiAccount = val.value;
+                        match ui_account.data {
+                            UiAccountData::Binary(data, encoding) => {
+                                println!("Binary data: {:?}, Encoding: {:?}", data, encoding);
+                                // Process binary data here
+                            }
+                            UiAccountData::Json(data) => {
+                                let record_clone = record.clone();
+                                let token_acct_update_res = conn_manager_arg_clone
+                                    .interact(move |conn| {
+                                        return handle_token_acct_change(conn, record_clone, data);
+                                    })
+                                    .await;
+                                match token_acct_update_res {
+                                    Ok(res) => match res {
+                                        Ok(ok) => println!("{:?}", ok),
+                                        Err(e) => println!("error kind: {:?}", e),
+                                    },
+                                    Err(e) => println!("interact error: {:?}", e),
+                                }
+                                // Process JSON data here
+                            }
+                            UiAccountData::LegacyBinary(data) => {
+                                println!("Parsed LegacyBinary data: {:?}", data);
+                                // Process parsed JSON data here
+                            }
                         }
                     }
-                }
-                // for val in subscription. {
-                //     let ui_account: UiAccount = val.value;
-                //     let account_data = ui_account.data.decode();
-                //     // how to decode the solana token balance account in rusty here
-                // }
-                // tokio::spawn(async move {
-                //     while let Some(val) = receiver. {
-                //         let ui_account: UiAccount = val.value;
-                //         if let Some(account_data) = ui_account.data {
-                //             println!("account data: {:?}", account_data);
-                //             // if let Some(balance) = decode_token_balance(&account_data) {
-                //             //     println!("Token account balance: {:?}", balance);
-                //             // }
-                //         }
-                //     }
-                // });
-                rpc_subs.push(subscription);
+                });
             }
             Err(e) => eprintln!("Error with token acct pubkey parsing: {}", e),
         }
@@ -99,9 +107,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Received CTRL+C, shutting down.");
     Ok(())
 }
-
-// fn string_to_pubkey(input: &str) -> Result<Pubkey, Box<dyn std::error::Error>> {
-//     let bytes = bs58::decode(input).into_vec()?;
-//     let array: [u8; 32] = bytes.try_into().map_err(|_| "Invalid length")?;
-//     Ok(Pubkey::from_str(&array))
-// }

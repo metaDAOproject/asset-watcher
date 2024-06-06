@@ -10,7 +10,7 @@ table! {
     }
 }
 
-#[derive(Queryable)]
+#[derive(Queryable, Clone)]
 pub struct TokenAcct {
     pub token_acct: String,
     pub mint_acct: String,

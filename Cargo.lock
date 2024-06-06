@@ -341,6 +341,7 @@ dependencies = [
  "solana-client",
  "solana-program",
  "solana-sdk",
+ "spl-token",
  "tokio",
  "tokio-tungstenite 0.21.0",
  "url",
