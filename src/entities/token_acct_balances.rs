@@ -5,7 +5,7 @@ table! {
         token_acct -> Varchar,
         mint_acct -> Varchar,
         owner_acct -> Varchar,
-        amount -> Double,
+        amount -> BigInt,
         created_at -> Timestamp,
     }
 }
@@ -15,7 +15,7 @@ pub struct TokenAcctBalances {
     pub token_acct: String,
     pub mint_acct: String,
     pub owner_acct: String,
-    pub amount: f64,
+    pub amount: i64,
     pub created_at: SystemTime,
 }
 
@@ -25,6 +25,6 @@ pub struct TokenAcctBalancesRecord {
     pub token_acct: String,
     pub mint_acct: String,
     pub owner_acct: String,
-    pub amount: f64,
+    pub amount: i64,
     pub created_at: SystemTime,
 }
