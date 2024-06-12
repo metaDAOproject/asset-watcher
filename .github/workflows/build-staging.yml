@@ -36,15 +36,15 @@ jobs:
           tags: themetadao/asset-watcher:staging
           labels: ${{ steps.meta.outputs.labels }}
 
-  # redeploy_app:
-  #   name: Redeploy app on Railway
-  #   needs: build_and_push
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Call Redeploy API
-  #       run: |
-  #         curl https://backboard.railway.app/graphql/v2 \
-  #         -X POST \
-  #         -H "Authorization: Bearer ${{ secrets.RAILWAY_TOKEN }}" \
-  #         -H "Content-Type: application/json" \
-  #         --data "{\"query\":\"mutation { deploymentRedeploy(id: \\\"66218c70-8c19-4981-a295-12d442949870\\\") { status } }\"}" \
+  redeploy_app:
+    name: Redeploy app on Railway
+    needs: build_and_push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Redeploy API
+        run: |
+          curl https://backboard.railway.app/graphql/v2 \
+          -X POST \
+          -H "Authorization: Bearer ${{ secrets.RAILWAY_TOKEN }}" \
+          -H "Content-Type: application/json" \
+          --data "{\"query\":\"mutation { deploymentRedeploy(id: \\\"c1221eaa-e011-4ed7-9bbb-5597692f5532?id=d203ea8b-6d34-4261-a486-1faea075824b\\\") { status } }\"}" \

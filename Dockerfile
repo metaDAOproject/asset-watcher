@@ -18,7 +18,7 @@ RUN cargo build --release --bin asset-watcher
 FROM debian:bookworm-slim AS runtime
 RUN mkdir /run/sshd
 RUN apt-get update
-RUN apt-get install ca-certificates -y
+RUN apt-get install ca-certificates libpq5 -y 
 RUN update-ca-certificates
 EXPOSE 3000
 WORKDIR /asset-watcher
