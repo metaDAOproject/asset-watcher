@@ -47,4 +47,4 @@ jobs:
           -X POST \
           -H "Authorization: Bearer ${{ secrets.RAILWAY_TOKEN }}" \
           -H "Content-Type: application/json" \
-          --data "{\"query\":\"mutation { deploymentRedeploy(id: \\\"c1221eaa-e011-4ed7-9bbb-5597692f5532?id=d203ea8b-6d34-4261-a486-1faea075824b\\\") { status } }\"}" \
+          --data "{\"query\":\"mutation { deploymentRedeploy(id: \\\"71557dea-ba37-4e02-a04c-f6ed7fe0a10d\\\") { status } }\"}" \
