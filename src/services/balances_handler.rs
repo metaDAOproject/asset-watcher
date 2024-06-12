@@ -3,27 +3,49 @@ use crate::entities::token_acct_balances::TokenAcctBalancesRecord;
 use crate::entities::token_accts::token_accts;
 use crate::entities::token_accts::token_accts::dsl::*;
 use crate::entities::token_accts::TokenAcct;
-use deadpool::managed::Object;
-use deadpool_diesel::Manager;
 use diesel::prelude::*;
 use diesel::PgConnection;
+use serde_json::Value;
+use solana_account_decoder::parse_account_data::ParsedAccount;
+use std::io::ErrorKind;
 use std::time::SystemTime;
 
-pub async fn handle_token_acct_change(
-    connection: Object<Manager<PgConnection>>,
+pub fn handle_token_acct_change(
+    connection: &mut PgConnection,
     record: TokenAcct,
-    new_amount: f64,
-) -> Result<(), Box<dyn std::error::Error>> {
-    // let parsed_msg: Value = serde_json::from_str(msg).expect("Failed to parse JSON");
-    // let new_amount = parsed_msg["params"]["result"]["value"]["amount"]
-    //     .as_i64()
-    //     .expect("Failed to get amount");
+    updated_token_account: ParsedAccount,
+) -> Result<(), ErrorKind> {
+    // Parse the object
+    let parsed_object = updated_token_account.parsed.as_object();
 
-    // let now = SystemTime::now();
+    // Extract the token amount information
+    let token_amount = parsed_object
+        .and_then(|object| object.get("info"))
+        .and_then(|info| info.get("tokenAmount"))
+        .and_then(|token_amount| token_amount.as_object());
 
-    // let connection_clone = Arc::clone(&self.connection);
+    // Bail out if token amount information is missing
+    if token_amount.is_none() {
+        println!("Could not parse token acct change");
+        return Ok(());
+    }
 
-    // Insert a new row into the TokenAcctBalances table
+    let token_amount_unwrapped = token_amount.unwrap();
+
+    // Extract amount and decimals, bail out if any are missing or not in expected format
+    let new_amount_str = token_amount_unwrapped
+        .get("amount")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            println!("amount not found or invalid");
+            ErrorKind::InvalidData
+        })?;
+
+    let new_amount: i64 = new_amount_str.parse().map_err(|_| {
+        println!("Failed to parse amount as i64");
+        ErrorKind::InvalidData
+    })?;
+
     let new_balance = TokenAcctBalancesRecord {
         token_acct: record.token_acct.clone(),
         mint_acct: record.mint_acct.clone(),
@@ -32,18 +54,18 @@ pub async fn handle_token_acct_change(
         created_at: SystemTime::now(),
     };
 
-    connection
-        .interact(move |conn| {
-            diesel::insert_into(token_acct_balances::table)
-                .values(new_balance)
-                .execute(conn)
-                .expect("Error inserting into token_acct_balances");
+    diesel::insert_into(token_acct_balances::table)
+        .values(new_balance)
+        .execute(connection)
+        .expect("Error inserting into token_acct_balances");
 
-            diesel::update(token_accts::table.filter(token_acct.eq(record.token_acct)))
-                .set(amount.eq(new_amount))
-                .execute(conn)
-                .expect("Error updating token_accts");
-        })
-        .await?;
+    let now = SystemTime::now();
+    let mut token_balance: TokenAcct = record;
+    token_balance.amount = new_amount;
+    token_balance.updated_at = Some(now);
+    diesel::update(token_accts::table.filter(token_acct.eq(token_balance.token_acct.clone())))
+        .set(amount.eq(new_amount))
+        .execute(connection)
+        .expect("Error updating token_accts");
     Ok(())
 }
