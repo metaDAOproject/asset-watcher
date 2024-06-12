@@ -4,49 +4,26 @@ use deadpool::managed::Object;
 use deadpool_diesel::Manager;
 use diesel::prelude::*;
 use diesel::{ExpressionMethods, PgConnection};
-use futures::{stream, FutureExt, TryStreamExt};
-use futures_util::StreamExt;
-use postgres::NoTls;
+use postgres::Notification;
 use std::sync::Arc;
-use tokio_postgres::{connect, AsyncMessage};
 
 use crate::entities::transactions::{transactions::dsl::*, Transaction};
 
-// TODO this should just accept client instead of pool_connection mayb
 pub async fn new_handler(
-    db_url: &str,
+    notification: Notification,
     pool_connection: Arc<Object<Manager<PgConnection>>>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let (client, mut connection) = connect(db_url, NoTls).await.unwrap();
-    // Make transmitter and receiver.
-    let (tx, mut rx) = futures_channel::mpsc::unbounded();
-    let stream =
-        stream::poll_fn(move |cx| connection.poll_message(cx)).map_err(|e| panic!("{}", e));
-    let connection = stream.forward(tx).map(|r| r.unwrap());
-    tokio::spawn(connection);
-
-    client
-        .batch_execute("LISTEN transactions_insert_channel;")
-        .await
-        .unwrap();
-
-    while let Some(m) = rx.next().await {
-        match m {
-            AsyncMessage::Notification(n) => match n.channel() {
-                "transactions_insert_channel" => {
-                    println!("new transactions table payload: {:?}", n.payload());
-                    let cloned_connection = Arc::clone(&pool_connection);
-                    let tx_payload =
-                        TransactionsInsertChannelPayload::parse_payload(n.payload()).unwrap();
-                    handle_new_transaction(tx_payload.tx_sig, cloned_connection).await?;
-                }
-                _ => println!("unhandled channel: {:?}", n.payload()),
-            },
-            AsyncMessage::Notice(notice) => println!("async message error: {:?}", notice),
-            _ => println!("fallthrough handler of async message from postgres listener"),
-        }
-    }
-    Ok(())
+) {
+    println!(
+        "new transactions table payload: {:?}",
+        notification.payload()
+    );
+    match TransactionsInsertChannelPayload::parse_payload(notification.payload()) {
+        Ok(tx_payload) => match handle_new_transaction(tx_payload.tx_sig, pool_connection).await {
+            Ok(()) => println!("successfully handled new transaction notification"),
+            Err(e) => eprintln!("error handling new transaction notification: {:?}", e),
+        },
+        Err(e) => eprintln!("error parsing new transaction notification: {:?}", e),
+    };
 }
 
 async fn handle_new_transaction(

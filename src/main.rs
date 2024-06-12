@@ -5,10 +5,12 @@ extern crate dotenv;
 use diesel::prelude::*;
 use dotenv::dotenv;
 use entities::token_accts::TokenAcctStatus;
-use events::rpc_token_acct_updates;
+use futures::{stream, FutureExt, StreamExt, TryStreamExt};
+use postgres::NoTls;
 use solana_program::pubkey::Pubkey;
 use std::{env, sync::Arc};
 use tokio::signal;
+use tokio_postgres::{connect, AsyncMessage};
 mod entities;
 use entities::token_accts::{token_accts::dsl::*, TokenAcct};
 mod adapters;
@@ -18,6 +20,7 @@ use deadpool::managed::Object;
 use deadpool_diesel::postgres::{Pool, Runtime};
 use deadpool_diesel::Manager;
 use std::str::FromStr;
+use tokio::task::{self};
 
 async fn get_database_pool(
     db_url: &str,
@@ -60,7 +63,7 @@ async fn setup_event_listeners(
                 let conn_manager_arg_clone = Arc::clone(&managed_connection);
                 let pub_sub_client_clone = Arc::clone(&pub_sub_client);
                 tokio::spawn(async move {
-                    rpc_token_acct_updates::new_handler(
+                    events::rpc_token_acct_updates::new_handler(
                         pub_sub_client_clone,
                         conn_manager_arg_clone,
                         token_acct_pubkey,
@@ -72,8 +75,48 @@ async fn setup_event_listeners(
             Err(e) => eprintln!("Error with token acct pubkey parsing: {}", e),
         }
     }
-    events::transactions_insert::new_handler(db_url, Arc::clone(&managed_connection)).await?;
-    events::token_accts_insert::new_handler(db_url, managed_connection, pub_sub_client).await?;
+
+    let (client, mut connection) = connect(db_url, NoTls).await.unwrap();
+    // Make transmitter and receiver.
+    let (tx, mut rx) = futures_channel::mpsc::unbounded();
+    let stream =
+        stream::poll_fn(move |cx| connection.poll_message(cx)).map_err(|e| panic!("{}", e));
+    let connection = stream.forward(tx).map(|r| r.unwrap());
+    tokio::spawn(connection);
+
+    client
+        .batch_execute(
+            "
+        LISTEN transactions_insert_channel;
+        LISTEN token_accts_insert_channel;
+    ",
+        )
+        .await
+        .unwrap();
+
+    while let Some(m) = rx.next().await {
+        let connect_clone = Arc::clone(&managed_connection);
+        match m {
+            AsyncMessage::Notification(n) => match n.channel() {
+                "token_accts_insert_channel" => {
+                    task::spawn(events::token_accts_insert::new_handler(
+                        n,
+                        connect_clone,
+                        Arc::clone(&pub_sub_client),
+                    ));
+                }
+                "transactions_insert_channel" => {
+                    task::spawn(events::transactions_insert::new_handler(n, connect_clone));
+                }
+                _ => (),
+            },
+            AsyncMessage::Notice(notice) => println!("async message error: {:?}", notice),
+            _ => println!("fallthrough handler of async message from postgres listener"),
+        }
+    }
+
+    // TODO: event handlers should not return results themselves.. but things they call will return results and they should handle that internally
+
     Ok(())
 }
 
