@@ -39,6 +39,7 @@ pub async fn new_handler(
                 // Process binary data here
             }
             UiAccountData::Json(data) => {
+                println!("account subscribe notification: {:?}", data);
                 let record_clone = token_acct_record.clone();
                 let token_acct_clone = record_clone.token_acct.clone();
                 let token_acct_update_res = db
