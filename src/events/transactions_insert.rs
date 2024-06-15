@@ -91,12 +91,12 @@ async fn handle_new_transaction(
                         let swap_res_awaited = block_on(swap_res);
                         match swap_res_awaited {
                             Ok(_) => println!(
-                                "handled new mint tx: {:?}, {:?}",
+                                "handled swap tx: {:?}, {:?}",
                                 payload_parsed.signatures,
                                 payload_parsed.get_main_ix_type()
                             ),
                             Err(e) => eprintln!(
-                                "error tracking new mint: {:?}. payload: {:?}",
+                                "error tracking swap: {:?}. payload: {:?}",
                                 e, payload_parsed
                             ),
                         }
@@ -106,7 +106,7 @@ async fn handle_new_transaction(
             InstructionType::AmmDeposit => {
                 connection
                     .interact(move |conn| {
-                        let amm_deposit_res = services::liquidity_providing::handle_lp_deposit_tx(
+                        let amm_deposit_res = services::liquidity_adding::handle_lp_deposit_tx(
                             conn,
                             pub_sub_client,
                             payload_parsed.clone(),
@@ -116,12 +116,38 @@ async fn handle_new_transaction(
                         let amm_deposit_res_awaited = block_on(amm_deposit_res);
                         match amm_deposit_res_awaited {
                             Ok(_) => println!(
-                                "handled new mint tx: {:?}, {:?}",
+                                "handled amm deposit tx: {:?}, {:?}",
                                 payload_parsed.signatures,
                                 payload_parsed.get_main_ix_type()
                             ),
                             Err(e) => eprintln!(
-                                "error tracking new mint: {:?}. payload: {:?}",
+                                "error tracking amm deposit: {:?}. payload: {:?}",
+                                e, payload_parsed
+                            ),
+                        }
+                    })
+                    .await?;
+            }
+            InstructionType::AmmWithdraw => {
+                connection
+                    .interact(move |conn| {
+                        let amm_withdrawal_res =
+                            services::liquidity_removing::handle_lp_withdrawal_tx(
+                                conn,
+                                pub_sub_client,
+                                payload_parsed.clone(),
+                                txn[0].tx_sig.clone(),
+                            );
+
+                        let amm_withdrawal_res_awaited = block_on(amm_withdrawal_res);
+                        match amm_withdrawal_res_awaited {
+                            Ok(_) => println!(
+                                "handled amm withdrawal tx: {:?}, {:?}",
+                                payload_parsed.signatures,
+                                payload_parsed.get_main_ix_type()
+                            ),
+                            Err(e) => eprintln!(
+                                "error tracking amm withdrawal: {:?}. payload: {:?}",
                                 e, payload_parsed
                             ),
                         }
