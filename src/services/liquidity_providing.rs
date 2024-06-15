@@ -18,15 +18,17 @@ use solana_client::nonblocking::pubsub_client::PubsubClient;
 
 use super::transactions;
 
-pub async fn handle_swap_tx(
+pub async fn handle_lp_deposit_tx(
     connection: &mut PgConnection,
     pub_sub_client: Arc<PubsubClient>,
     transaction_payload: Payload,
     transaction_sig: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let swap_instruction = find_swap_instruction(&transaction_payload)?;
-    let authority_account = find_authority_account(&swap_instruction)?;
-    let amm_acct = swap_instruction
+    let lp_deposit_instruction = find_lp_deposit_instruction(&transaction_payload)?;
+    let authority_account = find_authority_account(&lp_deposit_instruction)?;
+    let (lp_ata, lp_mint) = find_lp_mint_and_ata_account(&lp_deposit_instruction)?;
+    let mut lp_account_vec = vec![(lp_ata.as_str(), lp_mint)];
+    let amm_acct = lp_deposit_instruction
         .accounts_with_data
         .iter()
         .find(|account| account.name == "amm")
@@ -40,14 +42,15 @@ pub async fn handle_swap_tx(
     if amm_acct_str == "" {
         return Err(Box::new(io::Error::new(
             io::ErrorKind::Other,
-            "amm_acct not found",
+            "This is an error message",
         )));
     }
 
     let (base_mint, quote_mint) = find_base_and_quote_mint(amm_acct_str, connection)?;
 
-    let relevant_accounts =
-        get_relevant_accounts_from_ix_and_mints(&swap_instruction, base_mint, quote_mint);
+    let mut relevant_accounts =
+        get_relevant_accounts_from_ix_and_mints(&lp_deposit_instruction, base_mint, quote_mint);
+    relevant_accounts.append(&mut lp_account_vec);
 
     for (token_account, mint_acct_value) in relevant_accounts {
         // Check if the token record exists
@@ -119,26 +122,50 @@ pub async fn handle_swap_tx(
     Ok(())
 }
 
-fn find_swap_instruction(
+fn find_lp_deposit_instruction(
     transaction_payload: &Payload,
 ) -> Result<Instruction, Box<dyn std::error::Error>> {
     transaction_payload
         .instructions
         .iter()
-        .find(|instruction| instruction.name == "swap")
+        .find(|instruction| instruction.name == "addLiquidity")
         .cloned()
-        .ok_or_else(|| "swap instruction not found".into())
+        .ok_or_else(|| "addLiquidity instruction not found".into())
 }
 
 fn find_authority_account(
-    mint_instruction: &Instruction,
+    lp_deposit_instruction: &Instruction,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    mint_instruction
+    lp_deposit_instruction
         .accounts_with_data
         .iter()
         .find(|account| account.name == "user")
         .map(|account| account.pubkey.clone())
-        .ok_or_else(|| "Authority account not found in swap instruction".into())
+        .ok_or_else(|| "Authority account not found in addLiquidity instruction".into())
+}
+fn find_lp_mint_and_ata_account(
+    lp_deposit_instruction: &Instruction,
+) -> Result<(String, String), Box<dyn std::error::Error>> {
+    let mint_res: Result<String, &str> = lp_deposit_instruction
+        .accounts_with_data
+        .iter()
+        .find(|account| account.name == "lpMint")
+        .map(|account| account.pubkey.clone())
+        .ok_or_else(|| "lpMint account not found in addLiquidity instruction");
+    let ata_res: Result<String, &str> = lp_deposit_instruction
+        .accounts_with_data
+        .iter()
+        .find(|account| account.name == "userLpAccount")
+        .map(|account| account.pubkey.clone())
+        .ok_or_else(|| "lpMint account not found in addLiquidity instruction");
+
+    match (mint_res, ata_res) {
+        (Ok(mint), Ok(ata)) => Ok((ata, mint)),
+        _ => Err(Box::new(io::Error::new(
+            io::ErrorKind::Other,
+            "could not find lp accounts",
+        ))),
+    }
 }
 
 fn find_base_and_quote_mint(
@@ -153,13 +180,13 @@ fn find_base_and_quote_mint(
 }
 
 fn get_relevant_accounts_from_ix_and_mints(
-    mint_instruction: &crate::entities::transactions::Instruction,
+    lp_deposit_instruction: &crate::entities::transactions::Instruction,
     base_mint: String,
     quote_mint: String,
 ) -> Vec<(&str, String)> {
     // Collect the necessary "user" accounts to insert into token_accts
 
-    let relevant_accounts: Vec<(&str, String)> = mint_instruction
+    let relevant_accounts: Vec<(&str, String)> = lp_deposit_instruction
         .accounts_with_data
         .iter()
         .filter_map(|account| match account.name.as_str() {

@@ -81,15 +81,40 @@ async fn handle_new_transaction(
             InstructionType::AmmSwap => {
                 connection
                     .interact(move |conn| {
-                        let mint_handler_res = services::swaps::handle_swap_tx(
+                        let swap_res = services::swaps::handle_swap_tx(
                             conn,
                             pub_sub_client,
                             payload_parsed.clone(),
                             txn[0].tx_sig.clone(),
                         );
 
-                        let mint_handler_res_awaited = block_on(mint_handler_res);
-                        match mint_handler_res_awaited {
+                        let swap_res_awaited = block_on(swap_res);
+                        match swap_res_awaited {
+                            Ok(_) => println!(
+                                "handled new mint tx: {:?}, {:?}",
+                                payload_parsed.signatures,
+                                payload_parsed.get_main_ix_type()
+                            ),
+                            Err(e) => eprintln!(
+                                "error tracking new mint: {:?}. payload: {:?}",
+                                e, payload_parsed
+                            ),
+                        }
+                    })
+                    .await?;
+            }
+            InstructionType::AmmDeposit => {
+                connection
+                    .interact(move |conn| {
+                        let amm_deposit_res = services::liquidity_providing::handle_lp_deposit_tx(
+                            conn,
+                            pub_sub_client,
+                            payload_parsed.clone(),
+                            txn[0].tx_sig.clone(),
+                        );
+
+                        let amm_deposit_res_awaited = block_on(amm_deposit_res);
+                        match amm_deposit_res_awaited {
                             Ok(_) => println!(
                                 "handled new mint tx: {:?}, {:?}",
                                 payload_parsed.signatures,
