@@ -1,10 +1,10 @@
+use chrono::Utc;
 use diesel::prelude::*;
 use diesel::PgConnection;
 use solana_client::nonblocking::pubsub_client::PubsubClient;
 use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::SystemTime;
 
 use crate::entities::token_acct_balances::token_acct_balances;
 use crate::entities::token_acct_balances::TokenAcctBalances;
@@ -37,18 +37,19 @@ pub async fn handle_token_acct_balance_tx(
     };
 
     // Check if the balance record exists for the specific slot and token account
-    let balance_exists = token_acct_balances::table
-        .filter(
-            token_acct_balances::slot
-                .eq(slot)
-                .and(token_acct_balances::token_acct.eq(token_acct.clone())),
-        )
-        .count()
-        .get_result::<i64>(connection)?
-        > 0;
+    let existing_balance_res: Result<TokenAcctBalances, diesel::result::Error> =
+        token_acct_balances::table
+            .filter(
+                token_acct_balances::slot
+                    .eq(slot)
+                    .and(token_acct_balances::token_acct.eq(token_acct.clone())),
+            )
+            .first(connection);
 
-    if balance_exists {
-        // Update the tx_sig field if the balance record exists
+    let maybe_balance = existing_balance_res.ok();
+
+    if maybe_balance.is_some() && maybe_balance.unwrap().tx_sig.is_none() {
+        // Update the tx_sig field if the balance record exists and has no tx_sig
         diesel::update(
             token_acct_balances::table.filter(
                 token_acct_balances::token_acct
@@ -68,7 +69,7 @@ pub async fn handle_token_acct_balance_tx(
             delta,
             slot: slot,
             tx_sig: Some(transaction_sig.clone()),
-            created_at: SystemTime::now(),
+            created_at: Utc::now(),
         };
 
         diesel::insert_into(token_acct_balances::table)

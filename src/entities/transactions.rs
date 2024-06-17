@@ -7,7 +7,6 @@ use diesel::{
     sql_types::Text,
 };
 use serde::{Deserialize, Serialize};
-use std::time::SystemTime;
 
 table! {
     transactions (tx_sig) {
@@ -19,6 +18,18 @@ table! {
         serializer_logic_version -> SmallInt,
         main_ix_type -> Nullable<Varchar>,
     }
+}
+
+#[derive(Queryable, Clone, Selectable)]
+#[diesel(table_name = transactions)]
+pub struct Transaction {
+    pub tx_sig: String,
+    pub slot: i64,
+    pub block_time: DateTime<Utc>,
+    pub failed: bool,
+    pub payload: String,
+    pub serializer_logic_version: i16,
+    pub main_ix_type: Option<InstructionType>,
 }
 
 #[derive(Debug, Clone, Copy, AsExpression, FromSqlRow)]
@@ -71,18 +82,6 @@ impl FromSql<Text, Pg> for InstructionType {
             x => Err(format!("Unrecognized variant {:?}", x).into()),
         }
     }
-}
-
-#[derive(Queryable, Clone, Selectable)]
-#[diesel(table_name = transactions)]
-pub struct Transaction {
-    pub tx_sig: String,
-    pub slot: i64,
-    pub block_time: SystemTime,
-    pub failed: bool,
-    pub payload: String,
-    pub serializer_logic_version: i16,
-    pub main_ix_type: Option<InstructionType>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

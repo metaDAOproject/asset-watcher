@@ -13,30 +13,30 @@ use crate::events;
 use diesel::prelude::*;
 
 pub async fn run_job(
-    connection: Arc<Object<Manager<PgConnection>>>,
-    pub_sub_client: Arc<PubsubClient>,
-) {
+    pg_connection: Arc<Object<Manager<PgConnection>>>,
+    rpc_pub_sub_client: Arc<PubsubClient>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let thirty_days_ago = Utc::now().naive_utc() - Duration::days(30);
 
     // Run the query
-    let transactions = get_recent_transactions_with_main_ix_type(thirty_days_ago, &connection)
-        .expect("Failed to query transactions");
+    let transactions =
+        get_recent_transactions_with_main_ix_type(thirty_days_ago, Arc::clone(&pg_connection))
+            .await?;
 
     // Process each transaction
     for transaction in transactions {
-        events::transactions_insert::index_tx_record(
-            transaction,
-            Arc::clone(&connection),
-            Arc::clone(&pub_sub_client),
-        )
-        .await;
+        let pg_clone = Arc::clone(&pg_connection);
+        let rpc_ps_client_clone = Arc::clone(&rpc_pub_sub_client);
+        events::transactions_insert::index_tx_record(transaction, pg_clone, rpc_ps_client_clone)
+            .await?;
     }
+    Ok(())
 }
 
 async fn get_recent_transactions_with_main_ix_type(
     thirty_days_ago: NaiveDateTime,
     connection: Arc<Object<Manager<PgConnection>>>,
-) -> QueryResult<Vec<Transaction>> {
+) -> Result<Vec<Transaction>, Box<dyn std::error::Error>> {
     let res = connection
         .interact(move |conn| {
             transactions::table
@@ -45,9 +45,9 @@ async fn get_recent_transactions_with_main_ix_type(
                         .is_not_null()
                         .and(block_time.ge(thirty_days_ago)),
                 )
-                .load::<Transaction>(&conn)
+                .load::<Transaction>(conn)
         })
         .await?;
 
-    res
+    Ok(res?)
 }

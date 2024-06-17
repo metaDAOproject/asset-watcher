@@ -1,6 +1,5 @@
 use std::io;
 use std::sync::Arc;
-use std::time::SystemTime;
 
 use crate::entities::markets::markets;
 use crate::entities::markets::markets::market_acct;
@@ -12,6 +11,7 @@ use crate::entities::token_accts::TokenAcctStatus;
 use crate::entities::tokens;
 use crate::entities::transactions::Instruction;
 use crate::entities::transactions::Payload;
+use chrono::Utc;
 use diesel::prelude::*;
 use diesel::PgConnection;
 use solana_client::nonblocking::pubsub_client::PubsubClient;
@@ -99,7 +99,7 @@ pub async fn handle_lp_deposit_tx(
                 amount: account_balance,
                 status: TokenAcctStatus::Watching,
                 mint_acct: mint_acct_value.to_string(),
-                updated_at: Some(SystemTime::now()),
+                updated_at: Some(Utc::now()),
             };
 
             diesel::insert_into(token_accts)

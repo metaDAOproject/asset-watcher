@@ -3,13 +3,13 @@ use crate::entities::token_acct_balances::token_acct_balances::dsl::*;
 use crate::entities::token_acct_balances::TokenAcctBalances;
 use crate::entities::token_accts::token_accts;
 use crate::entities::token_accts::TokenAcct;
+use chrono::Utc;
 use diesel::prelude::*;
 use diesel::PgConnection;
 use serde_json::Value;
 use solana_account_decoder::parse_account_data::ParsedAccount;
 use solana_client::rpc_response::RpcResponseContext;
 use std::io::ErrorKind;
-use std::time::SystemTime;
 
 pub fn handle_token_acct_change(
     connection: &mut PgConnection,
@@ -70,7 +70,7 @@ pub fn handle_token_acct_change(
         amount: new_amount,
         delta: new_delta,
         slot: ctx.slot as i64,
-        created_at: SystemTime::now(),
+        created_at: Utc::now(),
         tx_sig: None,
     };
 
@@ -79,7 +79,7 @@ pub fn handle_token_acct_change(
         .execute(connection)
         .expect("Error inserting into token_acct_balances");
 
-    let now = SystemTime::now();
+    let now = Utc::now();
     let mut token_balance: TokenAcct = record;
     token_balance.amount = new_amount;
     token_balance.updated_at = Some(now);

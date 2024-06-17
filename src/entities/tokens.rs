@@ -1,4 +1,4 @@
-use std::time::SystemTime;
+use chrono::{DateTime, Utc};
 
 table! {
     tokens (mint_acct) {
@@ -20,6 +20,6 @@ pub struct Token {
     pub symbol: String,
     pub supply: i64,
     pub decimals: i16,
-    pub updated_at: SystemTime,
+    pub updated_at: DateTime<Utc>,
     pub image_url: Option<String>,
 }

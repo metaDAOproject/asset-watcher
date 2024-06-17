@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::serialize::IsNull;
 use diesel::{
@@ -8,7 +9,6 @@ use diesel::{
 };
 use serde::{Deserialize, Serialize};
 use std::io::Write;
-use std::time::SystemTime;
 
 table! {
     token_accts (token_acct) {
@@ -16,7 +16,7 @@ table! {
         mint_acct -> Varchar,
         owner_acct -> Varchar,
         amount -> BigInt,
-        updated_at -> Nullable<Timestamp>,
+        updated_at -> Nullable<Timestamptz>,
         status -> crate::entities::token_accts::TokenAcctStatusType,
     }
 }
@@ -27,7 +27,7 @@ pub struct TokenAcct {
     pub mint_acct: String,
     pub owner_acct: String,
     pub amount: i64,
-    pub updated_at: Option<SystemTime>,
+    pub updated_at: Option<DateTime<Utc>>,
     pub status: TokenAcctStatus,
 }
 

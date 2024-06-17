@@ -34,8 +34,12 @@ async fn get_database_pool(
     Ok(Arc::new(conn_manager))
 }
 
-async fn run_jobs() {
-    jobs::transaction_indexing::run_job();
+async fn run_jobs(
+    pg_connection: Arc<Object<Manager<PgConnection>>>,
+    rpc_pub_sub_client: Arc<PubsubClient>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    jobs::transaction_indexing::run_job(pg_connection, rpc_pub_sub_client).await?;
+    Ok(())
 }
 
 // TODO this should return a result
@@ -135,7 +139,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let pub_sub_client = adapters::rpc::get_pubsub_client().await?;
     let conn_manager_arc = get_database_pool(&database_url).await?;
-    run_jobs
+    run_jobs(Arc::clone(&conn_manager_arc), Arc::clone(&pub_sub_client)).await?;
 
     setup_event_listeners(&database_url, conn_manager_arc, pub_sub_client).await?;
 

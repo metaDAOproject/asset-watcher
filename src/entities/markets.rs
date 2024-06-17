@@ -1,4 +1,4 @@
-use std::time::SystemTime;
+use chrono::{DateTime, Utc};
 
 table! {
     use diesel::sql_types::*;
@@ -10,7 +10,7 @@ table! {
         proposal_acct -> Nullable<Varchar>,
         base_mint_acct -> Varchar,
         quote_mint_acct -> Varchar,
-        created_at -> Timestamp,
+        created_at -> Timestamptz,
     }
 }
 
@@ -23,5 +23,5 @@ pub struct Market {
     pub proposal_acct: Option<String>,
     pub base_mint_acct: String,
     pub quote_mint_acct: String,
-    pub created_at: SystemTime,
+    pub created_at: DateTime<Utc>,
 }
