@@ -20,7 +20,7 @@ use super::transactions;
 
 pub async fn handle_lp_withdrawal_tx(
     connection: &mut PgConnection,
-    pub_sub_client: Arc<PubsubClient>,
+    pub_sub_client: Option<Arc<PubsubClient>>,
     transaction_payload: Payload,
     transaction_sig: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -87,12 +87,12 @@ pub async fn handle_lp_withdrawal_tx(
         };
 
         // Check if the token account already exists
-        let token_acct_record: Vec<TokenAcct> = token_accts
+        let mut token_acct_record: Vec<TokenAcct> = token_accts
             .filter(token_accts::dsl::token_acct.eq(token_account))
             .load::<TokenAcct>(connection)?;
 
         // If the token account does not exist, insert it!
-        if Vec::len(&token_acct_record) > 0 {
+        if Vec::is_empty(&token_acct_record) {
             let new_token_acct = TokenAcct {
                 token_acct: token_account.to_string(),
                 owner_acct: authority_account.clone(),
@@ -102,21 +102,31 @@ pub async fn handle_lp_withdrawal_tx(
                 updated_at: Some(Utc::now()),
             };
 
-            diesel::insert_into(token_accts)
-                .values(&new_token_acct)
-                .execute(connection)?;
+            let token_acct_insertion_res: Result<TokenAcct, diesel::result::Error> =
+                diesel::insert_into(token_accts)
+                    .values(&new_token_acct)
+                    .get_result(connection);
+            let inserted_token_acct = token_acct_insertion_res?;
+            token_acct_record = vec![inserted_token_acct];
         }
 
-        transactions::handle_token_acct_balance_tx(
-            connection,
-            Arc::clone(&pub_sub_client),
-            token_account.to_string(),
-            account_balance,
-            transaction_sig.clone(),
-            transaction_payload.slot,
-            token_acct_record[0].status == TokenAcctStatus::Watching,
-        )
-        .await?;
+        if !Vec::is_empty(&token_acct_record) {
+            let pub_sub: Option<Arc<PubsubClient>> = match pub_sub_client {
+                Some(ref pub_sub) => Some(Arc::clone(&pub_sub)),
+                None => None,
+            };
+            transactions::handle_token_acct_balance_tx(
+                connection,
+                pub_sub,
+                token_account.to_string(),
+                account_balance,
+                transaction_sig.clone(),
+                transaction_payload.slot,
+                mint_acct_value.to_string(),
+                authority_account.clone(),
+            )
+            .await?;
+        }
     }
 
     Ok(())

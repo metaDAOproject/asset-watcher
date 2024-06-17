@@ -4,25 +4,20 @@ extern crate dotenv;
 
 use diesel::prelude::*;
 use dotenv::dotenv;
-use entities::token_accts::TokenAcctStatus;
-use futures::executor::block_on;
 use futures::{stream, FutureExt, StreamExt, TryStreamExt};
 use postgres::NoTls;
 use solana_client::nonblocking::pubsub_client::PubsubClient;
-use solana_program::pubkey::Pubkey;
 use std::{env, sync::Arc};
 use tokio::signal;
 use tokio_postgres::{connect, AsyncMessage};
-mod entities;
-mod jobs;
-use entities::token_accts::{token_accts::dsl::*, TokenAcct};
 mod adapters;
+mod entities;
 mod events;
+mod jobs;
 mod services;
 use deadpool::managed::Object;
 use deadpool_diesel::postgres::{Pool, Runtime};
 use deadpool_diesel::Manager;
-use std::str::FromStr;
 use tokio::task::{self};
 
 async fn get_database_pool(
@@ -36,9 +31,8 @@ async fn get_database_pool(
 
 async fn run_jobs(
     pg_connection: Arc<Object<Manager<PgConnection>>>,
-    rpc_pub_sub_client: Arc<PubsubClient>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    jobs::transaction_indexing::run_job(pg_connection, rpc_pub_sub_client).await?;
+    jobs::transaction_indexing::run_job(pg_connection).await?;
     Ok(())
 }
 
@@ -48,42 +42,6 @@ async fn setup_event_listeners(
     managed_connection: Arc<Object<Manager<PgConnection>>>,
     pub_sub_client: Arc<PubsubClient>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let results = managed_connection
-        .clone()
-        .interact(|conn| {
-            return token_accts
-                .filter(status.eq(TokenAcctStatus::Watching))
-                .load::<TokenAcct>(conn)
-                .expect("Error loading token_accts");
-        })
-        .await?;
-
-    for record in results {
-        match Pubkey::from_str(&record.token_acct) {
-            Ok(token_acct_pubkey) => {
-                let conn_manager_arg_clone = Arc::clone(&managed_connection);
-                let pub_sub_client_clone = Arc::clone(&pub_sub_client);
-                tokio::spawn(async move {
-                    conn_manager_arg_clone
-                        .interact(move |conn| {
-                            println!(
-                                "about to subscribe to acct: {}",
-                                token_acct_pubkey.to_string()
-                            );
-                            block_on(events::rpc_token_acct_updates::new_handler(
-                                pub_sub_client_clone,
-                                conn,
-                                token_acct_pubkey,
-                                record,
-                            ))
-                        })
-                        .await
-                });
-            }
-            Err(e) => eprintln!("Error with token acct pubkey parsing: {}", e),
-        }
-    }
-
     let (client, mut connection) = connect(db_url, NoTls).await.unwrap();
     // Make transmitter and receiver.
     let (tx, mut rx) = futures_channel::mpsc::unbounded();
@@ -139,7 +97,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let pub_sub_client = adapters::rpc::get_pubsub_client().await?;
     let conn_manager_arc = get_database_pool(&database_url).await?;
-    run_jobs(Arc::clone(&conn_manager_arc), Arc::clone(&pub_sub_client)).await?;
+    run_jobs(Arc::clone(&conn_manager_arc)).await?;
 
     setup_event_listeners(&database_url, conn_manager_arc, pub_sub_client).await?;
 

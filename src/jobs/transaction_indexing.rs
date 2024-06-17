@@ -4,7 +4,6 @@ use chrono::{Duration, NaiveDateTime, Utc};
 use deadpool::managed::Object;
 use deadpool_diesel::Manager;
 use diesel::{ExpressionMethods, PgConnection};
-use solana_client::nonblocking::pubsub_client::PubsubClient;
 
 use crate::entities::transactions::transactions;
 use crate::entities::transactions::transactions::main_ix_type;
@@ -14,9 +13,8 @@ use diesel::prelude::*;
 
 pub async fn run_job(
     pg_connection: Arc<Object<Manager<PgConnection>>>,
-    rpc_pub_sub_client: Arc<PubsubClient>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let thirty_days_ago = Utc::now().naive_utc() - Duration::days(30);
+    let thirty_days_ago = Utc::now().naive_utc() - Duration::days(5);
 
     // Run the query
     let transactions =
@@ -26,9 +24,7 @@ pub async fn run_job(
     // Process each transaction
     for transaction in transactions {
         let pg_clone = Arc::clone(&pg_connection);
-        let rpc_ps_client_clone = Arc::clone(&rpc_pub_sub_client);
-        events::transactions_insert::index_tx_record(transaction, pg_clone, rpc_ps_client_clone)
-            .await?;
+        events::transactions_insert::index_tx_record(transaction, pg_clone, None).await?;
     }
     Ok(())
 }

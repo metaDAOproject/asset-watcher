@@ -3,8 +3,10 @@ use diesel::prelude::*;
 use diesel::PgConnection;
 use solana_client::nonblocking::pubsub_client::PubsubClient;
 use solana_sdk::pubkey::Pubkey;
+use std::env;
 use std::str::FromStr;
 use std::sync::Arc;
+use tokio::task;
 
 use crate::entities::token_acct_balances::token_acct_balances;
 use crate::entities::token_acct_balances::TokenAcctBalances;
@@ -16,12 +18,13 @@ use crate::events;
  */
 pub async fn handle_token_acct_balance_tx(
     connection: &mut PgConnection,
-    pub_sub_client: Arc<PubsubClient>,
+    pub_sub_client: Option<Arc<PubsubClient>>,
     token_acct: String,
     new_balance: i64,
     transaction_sig: String,
     slot: i64,
-    create_acct_subscriber: bool,
+    mint_acct: String,
+    owner_acct: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Query the most recent value for the given token_acct to calculate the delta
     let previous_balance = token_acct_balances::table
@@ -47,6 +50,7 @@ pub async fn handle_token_acct_balance_tx(
             .first(connection);
 
     let maybe_balance = existing_balance_res.ok();
+    let maybe_balance_copy = maybe_balance.clone();
 
     if maybe_balance.is_some() && maybe_balance.unwrap().tx_sig.is_none() {
         // Update the tx_sig field if the balance record exists and has no tx_sig
@@ -59,12 +63,13 @@ pub async fn handle_token_acct_balance_tx(
         )
         .set(token_acct_balances::tx_sig.eq(transaction_sig.clone()))
         .execute(connection)?;
-    } else {
+    }
+    if maybe_balance_copy.is_none() {
         // Insert a new balance record if it does not exist
         let new_token_acct_balance = TokenAcctBalances {
             token_acct: token_acct.clone(),
-            mint_acct: "".to_string(), // Placeholder, as it is not provided
-            owner_acct: "".to_string(), // Placeholder, as it is not provided
+            mint_acct: mint_acct,
+            owner_acct: owner_acct,
             amount: new_balance,
             delta,
             slot: slot,
@@ -77,18 +82,27 @@ pub async fn handle_token_acct_balance_tx(
             .execute(connection)?;
     }
 
-    if create_acct_subscriber {
-        let token_acct_record = token_accts::table
-            .filter(token_accts::dsl::token_acct.eq(&token_acct))
-            .first(connection)?;
-        let pub_key = Pubkey::from_str(&token_acct)?;
-        events::rpc_token_acct_updates::new_handler(
-            pub_sub_client,
-            connection,
-            pub_key,
-            token_acct_record,
-        )
-        .await;
+    match pub_sub_client {
+        Some(pub_sub_client) => {
+            let token_acct_record = token_accts::table
+                .filter(token_accts::dsl::token_acct.eq(&token_acct))
+                .first(connection)?;
+            let pub_key = Pubkey::from_str(&token_acct)?;
+            task::spawn(async move {
+                // we have to construct a fresh connection here because of the new thread
+                let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+                let mut connection_val =
+                    PgConnection::establish(&database_url).expect("could not establish connection");
+                events::rpc_token_acct_updates::new_handler(
+                    pub_sub_client,
+                    &mut connection_val,
+                    pub_key,
+                    token_acct_record,
+                )
+                .await
+            });
+        }
+        None => (),
     }
 
     Ok(())

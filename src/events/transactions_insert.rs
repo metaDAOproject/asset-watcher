@@ -50,7 +50,7 @@ async fn handle_new_transaction(
     let txn_vec: Vec<Transaction> = txn_result?;
     let txn = &txn_vec[0];
 
-    index_tx_record(txn.clone(), connection, pub_sub_client).await?;
+    index_tx_record(txn.clone(), connection, Some(pub_sub_client)).await?;
 
     Ok(())
 }
@@ -58,7 +58,7 @@ async fn handle_new_transaction(
 pub async fn index_tx_record(
     tx: Transaction,
     connection: Arc<Object<Manager<PgConnection>>>,
-    pub_sub_client: Arc<PubsubClient>,
+    pub_sub_client: Option<Arc<PubsubClient>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let payload_parsed = Payload::parse_payload(&tx.payload)?;
 
@@ -82,8 +82,8 @@ pub async fn index_tx_record(
                                 payload_parsed.get_main_ix_type()
                             ),
                             Err(e) => eprintln!(
-                                "error tracking new mint: {:?}. payload: {:?}",
-                                e, payload_parsed
+                                "error tracking new mint: {:?}. payload instructions: {:?}",
+                                e, payload_parsed.instructions
                             ),
                         }
                     })
