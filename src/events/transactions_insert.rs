@@ -47,9 +47,20 @@ async fn handle_new_transaction(
         })
         .await?;
 
-    let txn = txn_result?;
+    let txn_vec: Vec<Transaction> = txn_result?;
+    let txn = &txn_vec[0];
 
-    let payload_parsed = Payload::parse_payload(&txn[0].payload)?;
+    index_tx_record(txn.clone(), connection, pub_sub_client).await?;
+
+    Ok(())
+}
+
+pub async fn index_tx_record(
+    tx: Transaction,
+    connection: Arc<Object<Manager<PgConnection>>>,
+    pub_sub_client: Arc<PubsubClient>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let payload_parsed = Payload::parse_payload(&tx.payload)?;
 
     match payload_parsed.get_main_ix_type() {
         Some(ix_type) => match ix_type {
@@ -60,7 +71,7 @@ async fn handle_new_transaction(
                             conn,
                             pub_sub_client,
                             payload_parsed.clone(),
-                            txn[0].tx_sig.clone(),
+                            tx.tx_sig.clone(),
                         );
 
                         let mint_handler_res_awaited = block_on(mint_handler_res);
@@ -85,7 +96,7 @@ async fn handle_new_transaction(
                             conn,
                             pub_sub_client,
                             payload_parsed.clone(),
-                            txn[0].tx_sig.clone(),
+                            tx.tx_sig.clone(),
                         );
 
                         let swap_res_awaited = block_on(swap_res);
@@ -110,7 +121,7 @@ async fn handle_new_transaction(
                             conn,
                             pub_sub_client,
                             payload_parsed.clone(),
-                            txn[0].tx_sig.clone(),
+                            tx.tx_sig.clone(),
                         );
 
                         let amm_deposit_res_awaited = block_on(amm_deposit_res);
@@ -136,7 +147,7 @@ async fn handle_new_transaction(
                                 conn,
                                 pub_sub_client,
                                 payload_parsed.clone(),
-                                txn[0].tx_sig.clone(),
+                                tx.tx_sig.clone(),
                             );
 
                         let amm_withdrawal_res_awaited = block_on(amm_withdrawal_res);

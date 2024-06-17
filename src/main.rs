@@ -8,11 +8,13 @@ use entities::token_accts::TokenAcctStatus;
 use futures::executor::block_on;
 use futures::{stream, FutureExt, StreamExt, TryStreamExt};
 use postgres::NoTls;
+use solana_client::nonblocking::pubsub_client::PubsubClient;
 use solana_program::pubkey::Pubkey;
 use std::{env, sync::Arc};
 use tokio::signal;
 use tokio_postgres::{connect, AsyncMessage};
 mod entities;
+mod jobs;
 use entities::token_accts::{token_accts::dsl::*, TokenAcct};
 mod adapters;
 mod events;
@@ -32,13 +34,16 @@ async fn get_database_pool(
     Ok(Arc::new(conn_manager))
 }
 
+async fn run_jobs() {
+    jobs::transaction_indexing::run_job();
+}
+
 // TODO this should return a result
 async fn setup_event_listeners(
     db_url: &str,
     managed_connection: Arc<Object<Manager<PgConnection>>>,
+    pub_sub_client: Arc<PubsubClient>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let pub_sub_client = adapters::rpc::get_pubsub_client().await?;
-
     let results = managed_connection
         .clone()
         .interact(|conn| {
@@ -57,6 +62,10 @@ async fn setup_event_listeners(
                 tokio::spawn(async move {
                     conn_manager_arg_clone
                         .interact(move |conn| {
+                            println!(
+                                "about to subscribe to acct: {}",
+                                token_acct_pubkey.to_string()
+                            );
                             block_on(events::rpc_token_acct_updates::new_handler(
                                 pub_sub_client_clone,
                                 conn,
@@ -122,11 +131,13 @@ async fn setup_event_listeners(
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
-
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
+    let pub_sub_client = adapters::rpc::get_pubsub_client().await?;
     let conn_manager_arc = get_database_pool(&database_url).await?;
-    setup_event_listeners(&database_url, Arc::clone(&conn_manager_arc)).await?;
+    run_jobs
+
+    setup_event_listeners(&database_url, conn_manager_arc, pub_sub_client).await?;
 
     // Block the main function and handle CTRL+C
     signal::ctrl_c().await?;

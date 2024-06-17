@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use diesel::pg::{Pg, PgValue};
 use diesel::{
     backend::Backend,
@@ -12,11 +13,11 @@ table! {
     transactions (tx_sig) {
         tx_sig -> Varchar,
         slot -> BigInt,
-        block_time -> Timestamp,
+        block_time -> Timestamptz,
         failed -> Bool,
         payload -> Text,
         serializer_logic_version -> SmallInt,
-        main_ix_type -> Varchar,
+        main_ix_type -> Nullable<Varchar>,
     }
 }
 
@@ -81,7 +82,7 @@ pub struct Transaction {
     pub failed: bool,
     pub payload: String,
     pub serializer_logic_version: i16,
-    pub main_ix_type: InstructionType,
+    pub main_ix_type: Option<InstructionType>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
