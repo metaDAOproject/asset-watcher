@@ -10,7 +10,7 @@ async-trait = "0.1.58"
 bs58 = "0.5.1"
 deadpool = "0.12.1"
 deadpool-diesel = {version="0.6.1", features=["postgres"]}
-diesel = {version= "2.1.6", features=["postgres"]}
+diesel = {version= "2.1.6", features=["postgres", "chrono"]}
 dotenv = "0.15.0"
 futures-util = "0.3.30"
 hex = "0.4.3"
@@ -31,3 +31,4 @@ postgres = "0.19.7"
 tokio-postgres = "0.7.10"
 futures-channel = "0.3.30"
 futures = "0.3.30"
+chrono = "0.4.38"

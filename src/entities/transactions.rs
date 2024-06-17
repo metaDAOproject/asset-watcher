@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use diesel::pg::{Pg, PgValue};
 use diesel::{
     backend::Backend,
@@ -6,18 +7,29 @@ use diesel::{
     sql_types::Text,
 };
 use serde::{Deserialize, Serialize};
-use std::time::SystemTime;
 
 table! {
     transactions (tx_sig) {
         tx_sig -> Varchar,
         slot -> BigInt,
-        block_time -> Timestamp,
+        block_time -> Timestamptz,
         failed -> Bool,
         payload -> Text,
         serializer_logic_version -> SmallInt,
-        main_ix_type -> Varchar,
+        main_ix_type -> Nullable<Varchar>,
     }
+}
+
+#[derive(Queryable, Clone, Selectable)]
+#[diesel(table_name = transactions)]
+pub struct Transaction {
+    pub tx_sig: String,
+    pub slot: i64,
+    pub block_time: DateTime<Utc>,
+    pub failed: bool,
+    pub payload: String,
+    pub serializer_logic_version: i16,
+    pub main_ix_type: Option<InstructionType>,
 }
 
 #[derive(Debug, Clone, Copy, AsExpression, FromSqlRow)]
@@ -72,23 +84,11 @@ impl FromSql<Text, Pg> for InstructionType {
     }
 }
 
-#[derive(Queryable, Clone, Selectable)]
-#[diesel(table_name = transactions)]
-pub struct Transaction {
-    pub tx_sig: String,
-    pub slot: i64,
-    pub block_time: SystemTime,
-    pub failed: bool,
-    pub payload: String,
-    pub serializer_logic_version: i16,
-    pub main_ix_type: InstructionType,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Payload {
-    pub block_time: u64,
-    pub slot: u64,
+    pub block_time: i64,
+    pub slot: i64,
     pub recent_blockhash: String,
     pub compute_units_consumed: String,
     pub fee: String,
@@ -123,7 +123,7 @@ impl Payload {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
     pub name: String,
@@ -136,7 +136,7 @@ pub struct Account {
     pub post_token_balance: Option<TokenBalance>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenBalance {
     pub mint: String,
@@ -145,7 +145,7 @@ pub struct TokenBalance {
     pub decimals: u8,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Instruction {
     pub name: String,
@@ -157,7 +157,7 @@ pub struct Instruction {
     pub args: Vec<Arg>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountWithData {
     pub name: String,
@@ -166,7 +166,7 @@ pub struct AccountWithData {
     pub is_writeable: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Arg {
     pub name: String,
     #[serde(rename = "type")]

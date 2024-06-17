@@ -13,7 +13,7 @@ table! {
     }
 }
 
-#[derive(Queryable)]
+#[derive(Queryable, Clone)]
 pub struct ConditionalVault {
     pub cond_vault_acct: String,
     pub status: Option<String>,
