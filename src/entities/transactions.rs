@@ -43,6 +43,8 @@ pub enum InstructionType {
     OpenbookCancelOrder,
     AutocratInitializeProposal,
     AutocratFinalizeProposal,
+    VaultMergeConditionalTokens,
+    VaultRedeemConditionalTokensForUnderlyingTokens,
 }
 
 impl<DB> ToSql<Text, DB> for InstructionType
@@ -64,6 +66,12 @@ where
                 "autocrat_initialize_proposal".to_sql(out)
             }
             InstructionType::AutocratFinalizeProposal => "autocrat_finalize_proposal".to_sql(out),
+            InstructionType::VaultMergeConditionalTokens => {
+                "vault_merge_conditional_tokens".to_sql(out)
+            }
+            InstructionType::VaultRedeemConditionalTokensForUnderlyingTokens => {
+                "vault_redeem_conditional_tokens_for_underlying_tokens".to_sql(out)
+            }
         }
     }
 }
@@ -79,6 +87,10 @@ impl FromSql<Text, Pg> for InstructionType {
             b"openbook_cancel_order" => Ok(InstructionType::OpenbookCancelOrder),
             b"autocrat_initialize_proposal" => Ok(InstructionType::AutocratInitializeProposal),
             b"autocrat_finalize_proposal" => Ok(InstructionType::AutocratFinalizeProposal),
+            b"vault_merge_conditional_tokens" => Ok(InstructionType::VaultMergeConditionalTokens),
+            b"vault_redeem_conditional_tokens_for_underlying_tokens" => {
+                Ok(InstructionType::VaultRedeemConditionalTokensForUnderlyingTokens)
+            }
             x => Err(format!("Unrecognized variant {:?}", x).into()),
         }
     }

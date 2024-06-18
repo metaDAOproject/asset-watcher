@@ -165,6 +165,58 @@ pub async fn index_tx_record(
                     })
                     .await?;
             }
+            InstructionType::VaultMergeConditionalTokens => {
+                connection
+                    .interact(move |conn| {
+                        let merge_conditionals_res =
+                            services::merge_conditionals_for_underlying::handle_merge_conditional_tokens_tx(
+                                conn,
+                                pub_sub_client,
+                                payload_parsed.clone(),
+                                tx.tx_sig.clone(),
+                            );
+
+                        let merge_conditionals_res_awaited = block_on(merge_conditionals_res);
+                        match merge_conditionals_res_awaited {
+                            Ok(_) => println!(
+                                "handled merge conditionals tx: {:?}, {:?}",
+                                payload_parsed.signatures,
+                                payload_parsed.get_main_ix_type()
+                            ),
+                            Err(e) => eprintln!(
+                                "error tracking merge conditionals: {:?}. payload: {:?}",
+                                e, payload_parsed
+                            ),
+                        }
+                    })
+                    .await?;
+            }
+            InstructionType::VaultRedeemConditionalTokensForUnderlyingTokens => {
+                connection
+                    .interact(move |conn| {
+                        let merge_conditionals_res =
+                            services::redeem_conditionals::handle_redeem_conditional_tokens_tx(
+                                conn,
+                                pub_sub_client,
+                                payload_parsed.clone(),
+                                tx.tx_sig.clone(),
+                            );
+
+                        let merge_conditionals_res_awaited = block_on(merge_conditionals_res);
+                        match merge_conditionals_res_awaited {
+                            Ok(_) => println!(
+                                "handled merge conditionals tx: {:?}, {:?}",
+                                payload_parsed.signatures,
+                                payload_parsed.get_main_ix_type()
+                            ),
+                            Err(e) => eprintln!(
+                                "error tracking merge conditionals: {:?}. payload: {:?}",
+                                e, payload_parsed
+                            ),
+                        }
+                    })
+                    .await?;
+            }
             x => println!("unhandled ix type: {:?}", x),
         },
         None => println!("tx has no ix type we care about"),
