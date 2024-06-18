@@ -4,19 +4,13 @@ use std::sync::Arc;
 use crate::entities::markets::markets;
 use crate::entities::markets::markets::market_acct;
 use crate::entities::markets::Market;
-use crate::entities::token_accts::token_accts;
-use crate::entities::token_accts::token_accts::dsl::*;
-use crate::entities::token_accts::TokenAcct;
-use crate::entities::token_accts::TokenAcctStatus;
-use crate::entities::tokens;
 use crate::entities::transactions::Instruction;
 use crate::entities::transactions::Payload;
-use chrono::Utc;
 use diesel::prelude::*;
 use diesel::PgConnection;
 use solana_client::nonblocking::pubsub_client::PubsubClient;
 
-use super::transactions;
+use super::balances;
 
 pub async fn handle_swap_tx(
     connection: &mut PgConnection,
@@ -50,80 +44,20 @@ pub async fn handle_swap_tx(
         get_relevant_accounts_from_ix_and_mints(&swap_instruction, base_mint, quote_mint);
 
     for (token_account, mint_acct_value) in relevant_accounts {
-        // Check if the token record exists
-        let token_record_exists = tokens::tokens::table
-            .filter(tokens::tokens::dsl::mint_acct.eq(mint_acct_value.to_string()))
-            .count()
-            .get_result::<i64>(connection)?
-            > 0;
-
-        // If the token record does not exist, log a warning and skip
-        if !token_record_exists {
-            println!(
-                "Token table record not found for account: {}",
-                token_account
-            );
-            continue;
-        }
-
-        // Find the matching account in the root accounts array and extract postBalance
-        let account_with_balance = transaction_payload
-            .accounts
-            .iter()
-            .find(|acc| acc.pubkey == token_account)
-            .ok_or("Matching account not found in transaction payload")?;
-
-        let account_balance = match &account_with_balance.post_token_balance {
-            Some(token_balance) => token_balance
-                .amount
-                .split(':')
-                .nth(1)
-                .ok_or("Invalid postBalance format")?
-                .parse::<i64>()?,
-            None => 0,
+        let pub_sub: Option<Arc<PubsubClient>> = match pub_sub_client {
+            Some(ref pub_sub) => Some(Arc::clone(&pub_sub)),
+            None => None,
         };
-
-        // Check if the token account already exists
-        let mut token_acct_record: Vec<TokenAcct> = token_accts
-            .filter(token_accts::dsl::token_acct.eq(token_account))
-            .load::<TokenAcct>(connection)?;
-
-        // If the token account does not exist, insert it!
-        if Vec::is_empty(&token_acct_record) {
-            let new_token_acct = TokenAcct {
-                token_acct: token_account.to_string(),
-                owner_acct: authority_account.clone(),
-                amount: account_balance,
-                status: TokenAcctStatus::Watching,
-                mint_acct: mint_acct_value.to_string(),
-                updated_at: Some(Utc::now()),
-            };
-
-            let token_acct_insertion_res: Result<TokenAcct, diesel::result::Error> =
-                diesel::insert_into(token_accts)
-                    .values(&new_token_acct)
-                    .get_result(connection);
-            let inserted_token_acct = token_acct_insertion_res?;
-            token_acct_record = vec![inserted_token_acct];
-        }
-
-        if !Vec::is_empty(&token_acct_record) {
-            let pub_sub: Option<Arc<PubsubClient>> = match pub_sub_client {
-                Some(ref pub_sub) => Some(Arc::clone(&pub_sub)),
-                None => None,
-            };
-            transactions::handle_token_acct_balance_tx(
-                connection,
-                pub_sub,
-                token_account.to_string(),
-                account_balance,
-                transaction_sig.clone(),
-                transaction_payload.slot,
-                mint_acct_value.to_string(),
-                authority_account.clone(),
-            )
-            .await?;
-        }
+        balances::handle_token_acct_in_tx(
+            connection,
+            pub_sub,
+            transaction_payload.clone(),
+            transaction_sig.clone(),
+            &mint_acct_value,
+            token_account,
+            &authority_account,
+        )
+        .await?
     }
 
     Ok(())

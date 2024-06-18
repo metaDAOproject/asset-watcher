@@ -10,7 +10,7 @@ use solana_client::nonblocking::pubsub_client::PubsubClient;
 
 use super::balances;
 
-pub async fn handle_mint_tx(
+pub async fn handle_merge_conditional_tokens_tx(
     connection: &mut PgConnection,
     pub_sub_client: Option<Arc<PubsubClient>>,
     transaction_payload: Payload,
@@ -50,9 +50,9 @@ fn find_mint_instruction(
     transaction_payload
         .instructions
         .iter()
-        .find(|instruction| instruction.name == "mintConditionalTokens")
+        .find(|instruction| instruction.name == "mergeConditionalTokensForUnderlyingTokens")
         .cloned()
-        .ok_or_else(|| "mintConditionalTokens instruction not found".into())
+        .ok_or_else(|| "mergeConditionalTokensForUnderlyingTokens instruction not found".into())
 }
 
 fn find_authority_account(
@@ -63,7 +63,10 @@ fn find_authority_account(
         .iter()
         .find(|account| account.name == "authority")
         .map(|account| account.pubkey.clone())
-        .ok_or_else(|| "Authority account not found in mintConditionalTokens instruction".into())
+        .ok_or_else(|| {
+            "Authority account not found in mergeConditionalTokensForUnderlyingTokens instruction"
+                .into()
+        })
 }
 
 fn find_vault_account(
@@ -74,7 +77,10 @@ fn find_vault_account(
         .iter()
         .find(|account| account.name == "vault")
         .map(|account| account.pubkey.clone())
-        .ok_or_else(|| "Vault account not found in mintConditionalTokens instruction".into())
+        .ok_or_else(|| {
+            "Vault account not found in mergeConditionalTokensForUnderlyingTokens instruction"
+                .into()
+        })
 }
 
 fn get_conditional_vault(
