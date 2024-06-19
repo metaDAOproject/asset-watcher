@@ -45,10 +45,14 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          echo railway toke: $RAILWAY_TOKEN
-          echo "Authorization: Bearer ${RAILWAY_TOKEN}"
-          curl https://backboard.railway.app/graphql/v2 \
-          -X POST \
-          -H "Authorization: Bearer ${RAILWAY_TOKEN}" \
-          -H "Content-Type: application/json" \
-          --data "{\"query\":\"mutation { deploymentRedeploy(id: \\\"c84f681d-aad6-4c5f-a7e3-e517da1922d4\\\") { status } }\"}" \
+          curl https://backboard.railway.app/graphql/v2           
+          -X POST           
+          -H "Authorization: Bearer ${RAILWAY_TOKEN}"           
+          -H "Content-Type: application/json"           
+          --data '{
+            "query": "mutation serviceInstanceDeploy($serviceId: String!, $environmentId: String!) {\n  serviceInstanceDeploy(serviceId: $serviceId, environmentId: $environmentId)\n}\n",
+            "variables": {
+              "environmentId": "4015588d-3c82-4413-9484-314539aecd39",
+              "serviceId": "c1221eaa-e011-4ed7-9bbb-5597692f5532"
+            }
+          }
