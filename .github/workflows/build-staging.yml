@@ -38,7 +38,7 @@ jobs:
 
   redeploy_app:
     name: Redeploy app on Railway
-    needs: build_and_push
+    # needs: build_and_push
     runs-on: ubuntu-latest
     steps:
       - name: Call Redeploy API
