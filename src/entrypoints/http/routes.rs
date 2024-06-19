@@ -39,10 +39,7 @@ pub async fn listen_and_serve(
         .and(with_rpc_pub_sub(rpc_pub_sub))
         .and_then(post_watch_token_acct::handler);
 
-    let cors = warp::cors()
-        .allow_any_origin()
-        .allow_methods(&[Method::GET, Method::POST, Method::OPTIONS])
-        .allow_headers(vec!["authorization", "content-type"]);
+    let cors = warp::cors().allow_any_origin();
 
     let routes = watch_balance_route.with(cors);
 
