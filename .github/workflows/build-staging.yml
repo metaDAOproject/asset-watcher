@@ -43,6 +43,7 @@ jobs:
     steps:
       - name: Call Redeploy API
         run: |
+          echo railway toke: ${{ secrets.RAILWAY_TOKEN }}
           curl https://backboard.railway.app/graphql/v2 \
           -X POST \
           -H "Authorization: Bearer ${{ secrets.RAILWAY_TOKEN }}" \
