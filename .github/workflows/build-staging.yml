@@ -1,7 +1,7 @@
 name: STAGING -- Build & Push Docker Image
 on:
   push:
-    branches: [staging]
+    # branches: [staging]
     paths:
       - "**"
 
@@ -47,4 +47,4 @@ jobs:
           -X POST \
           -H "Authorization: Bearer ${{ secrets.RAILWAY_TOKEN }}" \
           -H "Content-Type: application/json" \
-          --data "{\"query\":\"mutation { deploymentRedeploy(id: \\\"71557dea-ba37-4e02-a04c-f6ed7fe0a10d\\\") { status } }\"}" \
+          --data "{\"query\":\"mutation { deploymentRedeploy(id: \\\"c84f681d-aad6-4c5f-a7e3-e517da1922d4\\\") { status } }\"}" \
