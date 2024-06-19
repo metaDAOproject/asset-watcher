@@ -19,7 +19,10 @@ pub async fn new_handler(
     token_acct_pubkey: Pubkey,
     token_acct_record: TokenAcct,
 ) {
-    println!("subscribing to acct: {}", token_acct_pubkey.to_string());
+    println!(
+        "subscribing to token acct: {}",
+        token_acct_pubkey.to_string()
+    );
     // TODO: use the watching status to persist what accounts are being watched, if it's already being watched, then it should be
     let timeout_flag = Arc::new(Mutex::new(true));
     let timeout_flag_arc = Arc::clone(&timeout_flag);
