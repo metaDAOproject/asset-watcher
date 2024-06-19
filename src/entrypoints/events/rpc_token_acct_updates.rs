@@ -19,7 +19,10 @@ pub async fn new_handler(
     token_acct_pubkey: Pubkey,
     token_acct_record: TokenAcct,
 ) {
-    println!("subscribing to acct: {}", token_acct_pubkey.to_string());
+    println!(
+        "subscribing to token acct: {}",
+        token_acct_pubkey.to_string()
+    );
     // TODO: use the watching status to persist what accounts are being watched, if it's already being watched, then it should be
     let timeout_flag = Arc::new(Mutex::new(true));
     let timeout_flag_arc = Arc::clone(&timeout_flag);
@@ -110,7 +113,7 @@ pub async fn new_handler(
         }
     }
     println!(
-        "end of rpc account subscriber scope, unsubscribing from account: {}",
+        "end of rpc account subscriber scope: {}",
         token_acct_pubkey.to_string()
     );
 
@@ -125,12 +128,13 @@ fn update_token_acct_with_status(
 ) {
     //update token back to enabled status
     let res = update(token_accts::table.filter(token_accts::token_acct.eq(token_acct.to_string())))
-        .set(token_accts::dsl::status.eq(status))
+        .set(token_accts::dsl::status.eq(status.clone()))
         .get_result::<TokenAcct>(db);
 
     match res {
         Ok(_) => println!(
-            "updated token acct to watching status: {}",
+            "updated token acct to {:?} status: {}",
+            status,
             token_acct.to_string()
         ),
         Err(e) => eprintln!(
