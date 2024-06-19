@@ -20,7 +20,7 @@ RUN mkdir /run/sshd
 RUN apt-get update
 RUN apt-get install ca-certificates libpq5 -y 
 RUN update-ca-certificates
-EXPOSE 3000
+EXPOSE 8080
 WORKDIR /asset-watcher
 COPY --from=builder /asset-watcher/target/release/asset-watcher /usr/local/bin
 
