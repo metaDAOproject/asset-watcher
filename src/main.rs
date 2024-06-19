@@ -3,17 +3,14 @@ extern crate diesel;
 extern crate dotenv;
 
 use diesel::prelude::*;
-use dotenv::dotenv;
 use futures::{stream, FutureExt, StreamExt, TryStreamExt};
 use postgres::NoTls;
 use solana_client::nonblocking::pubsub_client::PubsubClient;
 use std::{env, sync::Arc};
-use tokio::signal;
 use tokio_postgres::{connect, AsyncMessage};
 mod adapters;
 mod entities;
-mod events;
-mod jobs;
+mod entrypoints;
 mod services;
 use deadpool::managed::Object;
 use deadpool_diesel::postgres::{Pool, Runtime};
@@ -32,7 +29,7 @@ async fn get_database_pool(
 async fn run_jobs(
     pg_connection: Arc<Object<Manager<PgConnection>>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    jobs::transaction_indexing::run_job(pg_connection).await?;
+    entrypoints::jobs::transaction_indexing::run_job(pg_connection).await?;
     Ok(())
 }
 
@@ -41,7 +38,7 @@ async fn setup_event_listeners(
     db_url: &str,
     managed_connection: Arc<Object<Manager<PgConnection>>>,
     pub_sub_client: Arc<PubsubClient>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) {
     let (client, mut connection) = connect(db_url, NoTls).await.unwrap();
     // Make transmitter and receiver.
     let (tx, mut rx) = futures_channel::mpsc::unbounded();
@@ -65,14 +62,14 @@ async fn setup_event_listeners(
         match m {
             AsyncMessage::Notification(n) => match n.channel() {
                 "token_accts_insert_channel" => {
-                    task::spawn(events::token_accts_insert::new_handler(
+                    task::spawn(entrypoints::events::token_accts_insert::new_handler(
                         n,
                         connect_clone,
                         Arc::clone(&pub_sub_client),
                     ));
                 }
                 "transactions_insert_channel" => {
-                    task::spawn(events::transactions_insert::new_handler(
+                    task::spawn(entrypoints::events::transactions_insert::new_handler(
                         n,
                         connect_clone,
                         Arc::clone(&pub_sub_client),
@@ -84,25 +81,26 @@ async fn setup_event_listeners(
             _ => println!("fallthrough handler of async message from postgres listener"),
         }
     }
-
-    // TODO: event handlers should not return results themselves.. but things they call will return results and they should handle that internally
-
-    Ok(())
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    dotenv().ok();
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
     let pub_sub_client = adapters::rpc::get_pubsub_client().await?;
-    let conn_manager_arc = get_database_pool(&database_url).await?;
-    run_jobs(Arc::clone(&conn_manager_arc)).await?;
+    let db = get_database_pool(&database_url).await?;
 
-    setup_event_listeners(&database_url, conn_manager_arc, pub_sub_client).await?;
+    let pub_sub_clone = Arc::clone(&pub_sub_client);
+    let db_clone = Arc::clone(&db);
 
-    // Block the main function and handle CTRL+C
-    signal::ctrl_c().await?;
+    run_jobs(Arc::clone(&db_clone)).await?;
+
+    let database_url_copy = database_url.clone();
+    task::spawn(async move { setup_event_listeners(&database_url_copy, db, pub_sub_client).await });
+
+    // run the API
+    entrypoints::http::routes::listen_and_serve(db_clone, pub_sub_clone).await;
+
     println!("Received CTRL+C, shutting down.");
     Ok(())
 }

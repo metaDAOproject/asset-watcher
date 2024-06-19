@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod balances;
 pub mod liquidity_adding;
 pub mod liquidity_removing;
