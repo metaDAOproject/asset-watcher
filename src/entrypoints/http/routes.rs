@@ -5,6 +5,7 @@ use deadpool_diesel::Manager;
 use diesel::PgConnection;
 use solana_client::nonblocking::pubsub_client::PubsubClient;
 use tokio::sync::Mutex;
+use warp::http::Method;
 use warp::Filter;
 
 use crate::{entities::token_accts::WatchTokenBalancePayload, services::auth::AuthClient};
@@ -38,7 +39,12 @@ pub async fn listen_and_serve(
         .and(with_rpc_pub_sub(rpc_pub_sub))
         .and_then(post_watch_token_acct::handler);
 
-    let routes = watch_balance_route;
+    let cors = warp::cors()
+        .allow_any_origin()
+        .allow_methods(&[Method::GET, Method::POST, Method::OPTIONS])
+        .allow_headers(vec!["authorization", "content-type"]);
+
+    let routes = watch_balance_route.with(cors);
 
     warp::serve(routes).run(([0, 0, 0, 0], port)).await
 }
