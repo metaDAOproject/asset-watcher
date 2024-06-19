@@ -51,10 +51,4 @@ jobs:
           -X POST \
           -H "Authorization: Bearer ${RAILWAY_TOKEN}" \
           -H "Content-Type: application/json" \
-          --data '{ \
-            "query": "mutation serviceInstanceDeploy($serviceId: String!, $environmentId: String!) {\n  serviceInstanceDeploy(serviceId: $serviceId, environmentId: $environmentId)\n}\n", \
-            "variables": { \ 
-              "environmentId": "4015588d-3c82-4413-9484-314539aecd39",\
-              "serviceId": "c1221eaa-e011-4ed7-9bbb-5597692f5532" \
-            } \
-          }' \
+          --data '{"query": "mutation serviceInstanceDeploy($serviceId: String!, $environmentId: String!) {\n  serviceInstanceDeploy(serviceId: $serviceId, environmentId: $environmentId)\n}\n", "variables": { "environmentId": "4015588d-3c82-4413-9484-314539aecd39", "serviceId": "c1221eaa-e011-4ed7-9bbb-5597692f5532" } }' 
