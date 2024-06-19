@@ -55,4 +55,4 @@ jobs:
               "environmentId": "4015588d-3c82-4413-9484-314539aecd39",
               "serviceId": "c1221eaa-e011-4ed7-9bbb-5597692f5532"
             }
-          }
+          }'
