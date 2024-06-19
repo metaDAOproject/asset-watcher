@@ -11,7 +11,7 @@ use tokio::task;
 use crate::entities::token_acct_balances::token_acct_balances;
 use crate::entities::token_acct_balances::TokenAcctBalances;
 use crate::entities::token_accts::token_accts;
-use crate::events;
+use crate::entrypoints::events;
 
 /**
  * Handles updating our DB for a tx that affects a token acct balance.

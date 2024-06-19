@@ -77,3 +77,9 @@ impl TokenAcctsInsertChannelPayload {
         serde_json::from_str(json_str)
     }
 }
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WatchTokenBalancePayload {
+    pub token_acct: String,
+}

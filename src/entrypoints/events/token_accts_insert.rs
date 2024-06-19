@@ -1,7 +1,7 @@
 use crate::entities::token_accts::token_accts;
 use crate::entities::token_accts::TokenAcct;
 use crate::entities::token_accts::TokenAcctsInsertChannelPayload;
-use crate::events::rpc_token_acct_updates;
+use crate::entrypoints::events::rpc_token_acct_updates;
 use deadpool::managed::Object;
 use deadpool_diesel::Manager;
 use diesel::prelude::*;

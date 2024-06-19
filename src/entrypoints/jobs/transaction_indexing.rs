@@ -8,7 +8,7 @@ use diesel::{ExpressionMethods, PgConnection};
 use crate::entities::transactions::transactions;
 use crate::entities::transactions::transactions::main_ix_type;
 use crate::entities::transactions::{transactions::block_time, Transaction};
-use crate::events;
+use crate::entrypoints::events;
 use diesel::prelude::*;
 
 pub async fn run_job(
