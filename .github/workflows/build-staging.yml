@@ -42,10 +42,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Call Redeploy API
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          echo railway toke: ${{ secrets.RAILWAY_TOKEN }}
+          echo railway toke: $RAILWAY_TOKEN
+          echo "Authorization: Bearer ${RAILWAY_TOKEN}"
           curl https://backboard.railway.app/graphql/v2 \
           -X POST \
-          -H "Authorization: Bearer ${{ secrets.RAILWAY_TOKEN }}" \
+          -H "Authorization: Bearer ${RAILWAY_TOKEN}" \
           -H "Content-Type: application/json" \
           --data "{\"query\":\"mutation { deploymentRedeploy(id: \\\"c84f681d-aad6-4c5f-a7e3-e517da1922d4\\\") { status } }\"}" \
