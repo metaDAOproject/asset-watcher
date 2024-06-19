@@ -1,6 +1,7 @@
+use std::env;
 use std::sync::{Arc, MutexGuard};
 
-use diesel::PgConnection;
+use diesel::{update, Connection, ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
 use futures::StreamExt;
 use solana_account_decoder::{UiAccount, UiAccountData};
 use solana_client::{nonblocking::pubsub_client::PubsubClient, rpc_config::RpcAccountInfoConfig};
@@ -8,7 +9,8 @@ use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 use std::sync::Mutex;
 use tokio::task;
 
-use crate::entities::token_accts::TokenAcct;
+use crate::entities::token_accts::token_accts::{self};
+use crate::entities::token_accts::{TokenAcct, TokenAcctStatus};
 use crate::services::balances;
 
 pub async fn new_handler(
@@ -42,6 +44,9 @@ pub async fn new_handler(
         return;
     }
 
+    // update token to watching status
+    update_token_acct_with_status(token_acct_pubkey.to_string(), TokenAcctStatus::Watching, db);
+
     let (mut subscription, unsubscribe) = account_subscribe_res.ok().unwrap();
 
     // spawn that timeout task
@@ -58,6 +63,15 @@ pub async fn new_handler(
         println!(
             "timed out. unsubscribing from account: {}",
             token_acct_pubkey.to_string()
+        );
+        // we have to construct a fresh connection here because of the new thread
+        let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        let mut new_conn =
+            PgConnection::establish(&database_url).expect("could not establish connection");
+        update_token_acct_with_status(
+            token_acct_pubkey.to_string(),
+            TokenAcctStatus::Enabled,
+            &mut new_conn,
         );
         unsubscribe();
     });
@@ -99,4 +113,29 @@ pub async fn new_handler(
         "end of rpc account subscriber scope, unsubscribing from account: {}",
         token_acct_pubkey.to_string()
     );
+
+    //update token back to enabled status
+    update_token_acct_with_status(token_acct_pubkey.to_string(), TokenAcctStatus::Enabled, db);
+}
+
+fn update_token_acct_with_status(
+    token_acct: String,
+    status: TokenAcctStatus,
+    db: &mut PgConnection,
+) {
+    //update token back to enabled status
+    let res = update(token_accts::table.filter(token_accts::token_acct.eq(token_acct.to_string())))
+        .set(token_accts::dsl::status.eq(status))
+        .get_result::<TokenAcct>(db);
+
+    match res {
+        Ok(_) => println!(
+            "updated token acct to watching status: {}",
+            token_acct.to_string()
+        ),
+        Err(e) => eprintln!(
+            "error updating token acct [{}] to watching status: {}",
+            token_acct, e
+        ),
+    }
 }
