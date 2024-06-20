@@ -49,6 +49,10 @@ pub async fn listen_and_serve(
             "Access-Control-Request-Method",
             "Access-Control-Request-Headers",
             "Content-Type",
+            "Authorization",
+            "Sec-Ch-Ua",
+            "Sec-Ch-Ua-Mobile",
+            "Sec-Ch-Ua-Platform",
         ])
         .allow_methods(vec!["POST", "GET", "OPTIONS"]);
 
