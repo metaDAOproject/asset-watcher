@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod conditional_vaults;
 pub mod markets;
 pub mod token_acct_balances;

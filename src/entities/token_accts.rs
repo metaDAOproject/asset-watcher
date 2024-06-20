@@ -83,3 +83,8 @@ impl TokenAcctsInsertChannelPayload {
 pub struct WatchTokenBalancePayload {
     pub token_acct: String,
 }
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct WatchTokenBalanceResponse {
+    pub message: String,
+}
