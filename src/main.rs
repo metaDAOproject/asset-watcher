@@ -85,6 +85,7 @@ async fn setup_event_listeners(
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // TODO setup API and watchers before running backfill...
     env_logger::init();
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
