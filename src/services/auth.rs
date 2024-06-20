@@ -1,44 +1,10 @@
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
 use std::error::Error;
 
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct AuthSessionResponse {
-    pub session_id: String,
-    pub was_logged_in: bool,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct AuthMessageResponse {
-    pub message: String,
-    pub session_id: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct AuthErrorResponse {
-    error: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct AuthPostRequest {
-    pub_key: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct AuthPutRequest {
-    id: String,
-    signature: String,
-    pub_key: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct AuthGetRequest {
-    pubkey: String,
-}
+use crate::entities::auth::{
+    AuthErrorResponse, AuthGetRequest, AuthMessageResponse, AuthPostRequest, AuthPutRequest,
+    AuthSessionResponse,
+};
 
 pub struct AuthClient {
     client: Client,

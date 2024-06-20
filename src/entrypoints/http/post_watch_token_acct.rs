@@ -5,6 +5,7 @@ use std::sync::Arc;
 use crate::entities::token_accts::token_accts::dsl::*;
 use crate::entities::token_accts::TokenAcct;
 use crate::entities::token_accts::WatchTokenBalancePayload;
+use crate::entities::token_accts::WatchTokenBalanceResponse;
 use crate::entrypoints::events;
 use deadpool::managed::Object;
 use deadpool_diesel::Manager;
@@ -14,7 +15,6 @@ use solana_client::nonblocking::pubsub_client::PubsubClient;
 use solana_sdk::pubkey::Pubkey;
 use tokio::task;
 use warp::http::StatusCode;
-use warp::reply::WithStatus;
 use warp::{reject::Reject, Reply};
 
 #[derive(Debug)]
@@ -26,10 +26,15 @@ pub async fn handler(
     message: WatchTokenBalancePayload,
     conn_manager: Arc<Object<Manager<PgConnection>>>,
     pub_sub_client: Arc<PubsubClient>,
-) -> Result<WithStatus<&str>, warp::Rejection> {
+) -> Result<impl warp::Reply, warp::Rejection> {
     let response = reply_with_status.into_response();
     if !response.status().is_success() {
-        return Ok(warp::reply::with_status("status error", response.status()));
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&WatchTokenBalanceResponse {
+                message: "unsuccessful response status".to_string(),
+            }),
+            response.status(),
+        ));
     }
 
     let token_acct_pubkey = message.token_acct.clone();
@@ -65,12 +70,16 @@ pub async fn handler(
             });
             // TODO: maybe implement a channel so that the new thread can let the requester know if there is a problem
             Ok(warp::reply::with_status(
-                "successfully began watching token_acct",
+                warp::reply::json(&WatchTokenBalanceResponse {
+                    message: "successfully subscribed to token".to_string(),
+                }),
                 StatusCode::OK,
             ))
         }
         _ => Ok(warp::reply::with_status(
-            "could not find token acct to watch",
+            warp::reply::json(&WatchTokenBalanceResponse {
+                message: "token acct not found".to_string(),
+            }),
             StatusCode::NOT_FOUND,
         )),
     }
