@@ -41,8 +41,16 @@ pub async fn listen_and_serve(
 
     let cors = warp::cors()
         .allow_any_origin()
-        .allow_headers(vec!["Content-Type"])
-        .allow_methods(&[Method::POST, Method::DELETE, Method::OPTIONS, Method::GET]);
+        .allow_headers(vec![
+            "User-Agent",
+            "Sec-Fetch-Mode",
+            "Referer",
+            "Origin",
+            "Access-Control-Request-Method",
+            "Access-Control-Request-Headers",
+            "Content-Type",
+        ])
+        .allow_methods(vec!["POST", "GET", "OPTIONS"]);
 
     let routes = watch_balance_route.with(cors);
 
