@@ -128,6 +128,12 @@ impl Payload {
                 }
                 "initializeProposal" => return Some(InstructionType::AutocratInitializeProposal),
                 "finalizeProposal" => return Some(InstructionType::AutocratFinalizeProposal),
+                "mergeConditionalTokensForUnderlyingTokens" => {
+                    return Some(InstructionType::VaultMergeConditionalTokens)
+                }
+                "redeemConditionalTokensForUnderlyingTokens" => {
+                    return Some(InstructionType::VaultRedeemConditionalTokensForUnderlyingTokens)
+                }
                 _ => continue,
             }
         }
