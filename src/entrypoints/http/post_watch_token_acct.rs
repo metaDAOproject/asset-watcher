@@ -77,10 +77,10 @@ pub async fn handler(
                 }
             }
         }
-        Err(_) => {
+        Err(e) => {
             return Ok(warp::reply::with_status(
                 warp::reply::json(&WatchTokenBalanceResponse {
-                    message: "could not find token_acct to update".to_string(),
+                    message: format!("could not find token_acct to update: {:?}", e),
                 }),
                 response.status(),
             ));
