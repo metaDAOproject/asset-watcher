@@ -1,17 +1,20 @@
 use std::io;
+use std::sync::Arc;
 
 use crate::entities::markets::markets;
 use crate::entities::markets::markets::market_acct;
 use crate::entities::markets::Market;
 use crate::entities::transactions::Instruction;
 use crate::entities::transactions::Payload;
+use deadpool::managed::Object;
+use deadpool_diesel::Manager;
 use diesel::prelude::*;
 use diesel::PgConnection;
 
 use super::balances;
 
 pub async fn handle_swap_tx(
-    connection: &mut PgConnection,
+    conn_manager: Arc<Object<Manager<PgConnection>>>,
     transaction_payload: Payload,
     transaction_sig: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -35,14 +38,15 @@ pub async fn handle_swap_tx(
         )));
     }
 
-    let (base_mint, quote_mint) = find_base_and_quote_mint(amm_acct_str, connection)?;
+    let (base_mint, quote_mint) =
+        find_base_and_quote_mint(amm_acct_str, Arc::clone(&conn_manager)).await?;
 
     let relevant_accounts =
         get_relevant_accounts_from_ix_and_mints(&swap_instruction, base_mint, quote_mint);
 
     for (token_account, mint_acct_value) in relevant_accounts {
         balances::handle_token_acct_in_tx(
-            connection,
+            Arc::clone(&conn_manager),
             transaction_payload.clone(),
             transaction_sig.clone(),
             &mint_acct_value,
@@ -77,13 +81,17 @@ fn find_authority_account(
         .ok_or_else(|| "Authority account not found in swap instruction".into())
 }
 
-fn find_base_and_quote_mint(
+async fn find_base_and_quote_mint(
     amm_acct: String,
-    connection: &mut PgConnection,
+    conn_manager: Arc<Object<Manager<PgConnection>>>,
 ) -> Result<(String, String), Box<dyn std::error::Error>> {
-    let amm_market: Market = markets::table
-        .filter(market_acct.eq(amm_acct))
-        .first(connection)?;
+    let amm_market: Market = conn_manager
+        .interact(|connection| {
+            markets::table
+                .filter(market_acct.eq(amm_acct))
+                .first(connection)
+        })
+        .await??;
 
     Ok((amm_market.base_mint_acct, amm_market.quote_mint_acct))
 }

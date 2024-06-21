@@ -7,7 +7,6 @@ use deadpool::managed::Object;
 use deadpool_diesel::Manager;
 use diesel::prelude::*;
 use diesel::PgConnection;
-use futures::executor::block_on;
 use postgres::Notification;
 use solana_client::nonblocking::pubsub_client::PubsubClient;
 use solana_sdk::pubkey::Pubkey;
@@ -32,8 +31,8 @@ pub async fn new_handler(
     )
     .await
     {
-        Ok(()) => println!("successfully handled new token_acct notification"),
-        Err(e) => eprintln!("error handling new token_acct notification: {:?}", e),
+        Ok(()) => println!("successfully handled token_acct status update notification"),
+        Err(e) => eprintln!("error token_acct status update notification: {:?}", e),
     };
 }
 
@@ -63,26 +62,14 @@ async fn handle_update_token_acct_status_notification(
     let pub_sub_client_clone = Arc::clone(&pub_sub_rpc_client);
 
     tokio::spawn(async move {
-        let res = cloned_connection
-            .interact(move |conn: &mut PgConnection| {
-                block_on(rpc_token_acct_updates::new_handler(
-                    pub_sub_client_clone,
-                    conn,
-                    token_acct_pubkey,
-                    token_acct_record.clone(),
-                ))
-            })
-            .await;
-
-        match res {
-            Ok(_) => (),
-            Err(e) => println!(
-                "DB error with creating rpc token acct update handler for acct [{}]: {:?}",
-                token_acct_string, e
-            ),
-        }
-    })
-    .await?;
+        rpc_token_acct_updates::new_handler(
+            pub_sub_client_clone,
+            Arc::clone(&cloned_connection),
+            token_acct_pubkey,
+            token_acct_record.clone(),
+        )
+        .await
+    });
 
     Ok(())
 }

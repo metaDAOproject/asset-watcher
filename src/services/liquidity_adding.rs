@@ -1,17 +1,20 @@
 use std::io;
+use std::sync::Arc;
 
 use crate::entities::markets::markets;
 use crate::entities::markets::markets::market_acct;
 use crate::entities::markets::Market;
 use crate::entities::transactions::Instruction;
 use crate::entities::transactions::Payload;
+use deadpool::managed::Object;
+use deadpool_diesel::Manager;
 use diesel::prelude::*;
 use diesel::PgConnection;
 
 use super::balances;
 
 pub async fn handle_lp_deposit_tx(
-    connection: &mut PgConnection,
+    conn_manager: Arc<Object<Manager<PgConnection>>>,
     transaction_payload: Payload,
     transaction_sig: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -33,11 +36,12 @@ pub async fn handle_lp_deposit_tx(
     if amm_acct_str == "" {
         return Err(Box::new(io::Error::new(
             io::ErrorKind::Other,
-            "This is an error message",
+            "no amm_acct_str",
         )));
     }
 
-    let (base_mint, quote_mint) = find_base_and_quote_mint(amm_acct_str, connection)?;
+    let (base_mint, quote_mint) =
+        find_base_and_quote_mint(amm_acct_str, Arc::clone(&conn_manager)).await?;
 
     let mut relevant_accounts =
         get_relevant_accounts_from_ix_and_mints(&lp_deposit_instruction, base_mint, quote_mint);
@@ -45,7 +49,7 @@ pub async fn handle_lp_deposit_tx(
 
     for (token_account, mint_acct_value) in relevant_accounts {
         balances::handle_token_acct_in_tx(
-            connection,
+            Arc::clone(&conn_manager),
             transaction_payload.clone(),
             transaction_sig.clone(),
             &mint_acct_value,
@@ -104,13 +108,17 @@ fn find_lp_mint_and_ata_account(
     }
 }
 
-fn find_base_and_quote_mint(
+async fn find_base_and_quote_mint(
     amm_acct: String,
-    connection: &mut PgConnection,
+    conn_manager: Arc<Object<Manager<PgConnection>>>,
 ) -> Result<(String, String), Box<dyn std::error::Error>> {
-    let amm_market: Market = markets::table
-        .filter(market_acct.eq(amm_acct))
-        .first(connection)?;
+    let amm_market: Market = conn_manager
+        .interact(|connection| {
+            markets::table
+                .filter(market_acct.eq(amm_acct))
+                .first(connection)
+        })
+        .await??;
 
     Ok((amm_market.base_mint_acct, amm_market.quote_mint_acct))
 }

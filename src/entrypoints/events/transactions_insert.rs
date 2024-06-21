@@ -59,151 +59,126 @@ pub async fn index_tx_record(
     match payload_parsed.get_main_ix_type() {
         Some(ix_type) => match ix_type {
             InstructionType::VaultMintConditionalTokens => {
-                connection
-                    .interact(move |conn| {
-                        let mint_handler_res = services::new_mint::handle_mint_tx(
-                            conn,
-                            payload_parsed.clone(),
-                            tx.tx_sig.clone(),
-                        );
+                let mint_handler_res = services::new_mint::handle_mint_tx(
+                    connection,
+                    payload_parsed.clone(),
+                    tx.tx_sig.clone(),
+                );
 
-                        let mint_handler_res_awaited = block_on(mint_handler_res);
-                        match mint_handler_res_awaited {
-                            Ok(_) => println!(
-                                "handled new mint tx: {:?}, {:?}",
-                                payload_parsed.signatures,
-                                payload_parsed.get_main_ix_type()
-                            ),
-                            Err(e) => eprintln!(
-                                "error tracking new mint: {:?}. payload instructions: {:?}",
-                                e, payload_parsed.instructions
-                            ),
-                        }
-                    })
-                    .await?;
+                let mint_handler_res_awaited = block_on(mint_handler_res);
+                match mint_handler_res_awaited {
+                    Ok(_) => println!(
+                        "handled new mint tx: {:?}, {:?}",
+                        payload_parsed.signatures,
+                        payload_parsed.get_main_ix_type()
+                    ),
+                    Err(e) => eprintln!(
+                        "error tracking new mint: {:?}. payload instructions: {:?}",
+                        e, payload_parsed.instructions
+                    ),
+                }
             }
             InstructionType::AmmSwap => {
-                connection
-                    .interact(move |conn| {
-                        let swap_res = services::swaps::handle_swap_tx(
-                            conn,
-                            payload_parsed.clone(),
-                            tx.tx_sig.clone(),
-                        );
+                let swap_res = services::swaps::handle_swap_tx(
+                    connection,
+                    payload_parsed.clone(),
+                    tx.tx_sig.clone(),
+                );
 
-                        let swap_res_awaited = block_on(swap_res);
-                        match swap_res_awaited {
-                            Ok(_) => println!(
-                                "handled swap tx: {:?}, {:?}",
-                                payload_parsed.signatures,
-                                payload_parsed.get_main_ix_type()
-                            ),
-                            Err(e) => eprintln!(
-                                "error tracking swap: {:?}. payload: {:?}",
-                                e, payload_parsed
-                            ),
-                        }
-                    })
-                    .await?;
+                let swap_res_awaited = block_on(swap_res);
+                match swap_res_awaited {
+                    Ok(_) => println!(
+                        "handled swap tx: {:?}, {:?}",
+                        payload_parsed.signatures,
+                        payload_parsed.get_main_ix_type()
+                    ),
+                    Err(e) => eprintln!(
+                        "error tracking swap: {:?}. payload: {:?}",
+                        e, payload_parsed
+                    ),
+                }
             }
             InstructionType::AmmDeposit => {
-                connection
-                    .interact(move |conn| {
-                        let amm_deposit_res = services::liquidity_adding::handle_lp_deposit_tx(
-                            conn,
-                            payload_parsed.clone(),
-                            tx.tx_sig.clone(),
-                        );
+                let amm_deposit_res = services::liquidity_adding::handle_lp_deposit_tx(
+                    connection,
+                    payload_parsed.clone(),
+                    tx.tx_sig.clone(),
+                );
 
-                        let amm_deposit_res_awaited = block_on(amm_deposit_res);
-                        match amm_deposit_res_awaited {
-                            Ok(_) => println!(
-                                "handled amm deposit tx: {:?}, {:?}",
-                                payload_parsed.signatures,
-                                payload_parsed.get_main_ix_type()
-                            ),
-                            Err(e) => eprintln!(
-                                "error tracking amm deposit: {:?}. payload: {:?}",
-                                e, payload_parsed
-                            ),
-                        }
-                    })
-                    .await?;
+                let amm_deposit_res_awaited = block_on(amm_deposit_res);
+                match amm_deposit_res_awaited {
+                    Ok(_) => println!(
+                        "handled amm deposit tx: {:?}, {:?}",
+                        payload_parsed.signatures,
+                        payload_parsed.get_main_ix_type()
+                    ),
+                    Err(e) => eprintln!(
+                        "error tracking amm deposit: {:?}. payload: {:?}",
+                        e, payload_parsed
+                    ),
+                }
             }
             InstructionType::AmmWithdraw => {
-                connection
-                    .interact(move |conn| {
-                        let amm_withdrawal_res =
-                            services::liquidity_removing::handle_lp_withdrawal_tx(
-                                conn,
-                                payload_parsed.clone(),
-                                tx.tx_sig.clone(),
-                            );
+                let amm_withdrawal_res = services::liquidity_removing::handle_lp_withdrawal_tx(
+                    connection,
+                    payload_parsed.clone(),
+                    tx.tx_sig.clone(),
+                );
 
-                        let amm_withdrawal_res_awaited = block_on(amm_withdrawal_res);
-                        match amm_withdrawal_res_awaited {
-                            Ok(_) => println!(
-                                "handled amm withdrawal tx: {:?}, {:?}",
-                                payload_parsed.signatures,
-                                payload_parsed.get_main_ix_type()
-                            ),
-                            Err(e) => eprintln!(
-                                "error tracking amm withdrawal: {:?}. payload: {:?}",
-                                e, payload_parsed
-                            ),
-                        }
-                    })
-                    .await?;
+                let amm_withdrawal_res_awaited = block_on(amm_withdrawal_res);
+                match amm_withdrawal_res_awaited {
+                    Ok(_) => println!(
+                        "handled amm withdrawal tx: {:?}, {:?}",
+                        payload_parsed.signatures,
+                        payload_parsed.get_main_ix_type()
+                    ),
+                    Err(e) => eprintln!(
+                        "error tracking amm withdrawal: {:?}. payload: {:?}",
+                        e, payload_parsed
+                    ),
+                }
             }
             InstructionType::VaultMergeConditionalTokens => {
-                connection
-                    .interact(move |conn| {
-                        let merge_conditionals_res =
-                            services::merge_conditionals_for_underlying::handle_merge_conditional_tokens_tx(
-                                conn,
-                                payload_parsed.clone(),
-                                tx.tx_sig.clone(),
-                            );
+                let merge_conditionals_res =
+                    services::merge_conditionals_for_underlying::handle_merge_conditional_tokens_tx(
+                        connection,
+                        payload_parsed.clone(),
+                        tx.tx_sig.clone(),
+                    );
 
-                        let merge_conditionals_res_awaited = block_on(merge_conditionals_res);
-                        match merge_conditionals_res_awaited {
-                            Ok(_) => println!(
-                                "handled merge conditionals tx: {:?}, {:?}",
-                                payload_parsed.signatures,
-                                payload_parsed.get_main_ix_type()
-                            ),
-                            Err(e) => eprintln!(
-                                "error tracking merge conditionals: {:?}. payload: {:?}",
-                                e, payload_parsed
-                            ),
-                        }
-                    })
-                    .await?;
+                let merge_conditionals_res_awaited = block_on(merge_conditionals_res);
+                match merge_conditionals_res_awaited {
+                    Ok(_) => println!(
+                        "handled merge conditionals tx: {:?}, {:?}",
+                        payload_parsed.signatures,
+                        payload_parsed.get_main_ix_type()
+                    ),
+                    Err(e) => eprintln!(
+                        "error tracking merge conditionals: {:?}. payload: {:?}",
+                        e, payload_parsed
+                    ),
+                }
             }
             InstructionType::VaultRedeemConditionalTokensForUnderlyingTokens => {
-                connection
-                    .interact(move |conn| {
-                        let merge_conditionals_res =
-                            services::redeem_conditionals::handle_redeem_conditional_tokens_tx(
-                                conn,
-                                payload_parsed.clone(),
-                                tx.tx_sig.clone(),
-                            );
+                let redeem_conditionals_res =
+                    services::redeem_conditionals::handle_redeem_conditional_tokens_tx(
+                        connection,
+                        payload_parsed.clone(),
+                        tx.tx_sig.clone(),
+                    );
 
-                        let merge_conditionals_res_awaited = block_on(merge_conditionals_res);
-                        match merge_conditionals_res_awaited {
-                            Ok(_) => println!(
-                                "handled merge conditionals tx: {:?}, {:?}",
-                                payload_parsed.signatures,
-                                payload_parsed.get_main_ix_type()
-                            ),
-                            Err(e) => eprintln!(
-                                "error tracking merge conditionals: {:?}. payload: {:?}",
-                                e, payload_parsed
-                            ),
-                        }
-                    })
-                    .await?;
+                let redeem_conditionals_res_awaited = block_on(redeem_conditionals_res);
+                match redeem_conditionals_res_awaited {
+                    Ok(_) => println!(
+                        "handled redeem conditionals tx: {:?}, {:?}",
+                        payload_parsed.signatures,
+                        payload_parsed.get_main_ix_type()
+                    ),
+                    Err(e) => eprintln!(
+                        "error tracking redeem conditionals: {:?}. payload: {:?}",
+                        e, payload_parsed
+                    ),
+                }
             }
             x => println!("unhandled ix type: {:?}", x),
         },
