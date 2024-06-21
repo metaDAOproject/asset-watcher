@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::entities::conditional_vaults::conditional_vaults::dsl::*;
 use crate::entities::conditional_vaults::ConditionalVault;
 use crate::entities::transactions::Instruction;

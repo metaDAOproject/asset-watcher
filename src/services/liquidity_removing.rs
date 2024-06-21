@@ -1,5 +1,4 @@
 use std::io;
-use std::sync::Arc;
 
 use crate::entities::markets::markets;
 use crate::entities::markets::markets::market_acct;
