@@ -16,6 +16,7 @@ use solana_account_decoder::parse_account_data::ParsedAccount;
 use solana_client::rpc_response::RpcResponseContext;
 use std::io;
 use std::io::ErrorKind;
+use std::sync::Arc;
 
 use super::transactions;
 
