@@ -218,7 +218,7 @@ pub async fn handle_token_acct_in_tx(
         conn_manager.clone(),
         token_account_str.clone(),
         account_balance,
-        transaction_sig_str,
+        Some(transaction_sig_str),
         transaction_payload.slot,
         mint_acct_value_str,
         authority_account_str,
