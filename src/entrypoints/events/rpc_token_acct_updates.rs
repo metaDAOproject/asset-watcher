@@ -68,14 +68,14 @@ pub async fn new_handler(
     let conn_manager_clone = Arc::clone(&conn_manager);
     task::spawn(async move {
         loop {
-            // 20 minute timeout for the length of a session
-            tokio::time::sleep(std::time::Duration::new(1200, 0)).await;
+            // 10 minute timeout for the length of a session
+            tokio::time::sleep(std::time::Duration::new(600, 0)).await;
             let mut timeout_flag_val: MutexGuard<bool> = timeout_flag_arc.lock().unwrap();
             if *timeout_flag_val {
                 break;
             }
 
-            *timeout_flag_val = true;
+            *timeout_flag_val = false;
         }
         println!(
             "timed out. unsubscribing from account: {}",
