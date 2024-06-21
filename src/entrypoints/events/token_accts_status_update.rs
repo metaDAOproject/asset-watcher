@@ -1,6 +1,7 @@
 use crate::entities::token_accts::token_accts;
 use crate::entities::token_accts::TokenAcct;
-use crate::entities::token_accts::TokenAcctsInsertChannelPayload;
+use crate::entities::token_accts::TokenAcctStatus;
+use crate::entities::token_accts::TokenAcctsStatusUpdateChannelPayload;
 use crate::entrypoints::events::rpc_token_acct_updates;
 use deadpool::managed::Object;
 use deadpool_diesel::Manager;
@@ -20,35 +21,39 @@ pub async fn new_handler(
     pub_sub_rpc_client: Arc<PubsubClient>,
 ) {
     println!(
-        "new token_accts_insert_channel payload: {:?}",
+        "new token_accts_status_update payload: {:?}",
         notification.payload()
     );
-    match handle_new_token_acct_notification(
+    match handle_update_token_acct_status_notification(
         pool_connection,
         notification,
         Arc::clone(&pub_sub_rpc_client),
     )
     .await
     {
-        Ok(()) => println!("successfully handled new token_acct notification"),
-        Err(e) => eprintln!("error handling new token_acct notification: {:?}", e),
+        Ok(()) => println!("successfully handled token_acct status update notification"),
+        Err(e) => eprintln!("error token_acct status update notification: {:?}", e),
     };
 }
 
-async fn handle_new_token_acct_notification(
+async fn handle_update_token_acct_status_notification(
     pool_connection: Arc<Object<Manager<PgConnection>>>,
     notification: Notification,
     pub_sub_rpc_client: Arc<PubsubClient>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let cloned_connection = Arc::clone(&pool_connection);
-    let token_acct_payload = TokenAcctsInsertChannelPayload::parse_payload(notification.payload())?;
+    let token_acct_payload =
+        TokenAcctsStatusUpdateChannelPayload::parse_payload(notification.payload())?;
+    if token_acct_payload.status != TokenAcctStatus::Watching {
+        return Ok(());
+    }
     let token_acct_string = token_acct_payload.token_acct;
-    let acct = token_acct_string.clone();
+    let token_acct_clone = token_acct_string.clone();
     let token_acct_record: TokenAcct = cloned_connection
         .clone()
         .interact(move |conn| {
             return token_accts
-                .filter(token_accts::dsl::token_acct.eq(&acct))
+                .filter(token_accts::dsl::token_acct.eq(&token_acct_clone))
                 .first(conn)
                 .expect("could not find token record");
         })
@@ -59,13 +64,12 @@ async fn handle_new_token_acct_notification(
     tokio::spawn(async move {
         rpc_token_acct_updates::new_handler(
             pub_sub_client_clone,
-            cloned_connection,
+            Arc::clone(&cloned_connection),
             token_acct_pubkey,
             token_acct_record.clone(),
         )
-        .await;
-    })
-    .await?;
+        .await
+    });
 
     Ok(())
 }

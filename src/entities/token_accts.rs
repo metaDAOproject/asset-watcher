@@ -35,12 +35,25 @@ pub struct TokenAcct {
 #[diesel(postgres_type(name = "token_acct_status"))]
 pub struct TokenAcctStatusType;
 
-#[derive(Debug, PartialEq, FromSqlRow, AsExpression, Eq, Clone, Hash, serde::Deserialize)]
+#[derive(
+    Debug, PartialEq, FromSqlRow, AsExpression, Eq, Clone, Hash, serde::Deserialize, Serialize,
+)]
 #[diesel(sql_type = TokenAcctStatusType)]
+#[serde(rename_all = "lowercase")]
 pub enum TokenAcctStatus {
     Watching,
     Enabled,
     Disabled,
+}
+
+impl ToString for TokenAcctStatus {
+    fn to_string(&self) -> String {
+        match self {
+            TokenAcctStatus::Watching => "watching".to_string(),
+            TokenAcctStatus::Enabled => "enabled".to_string(),
+            TokenAcctStatus::Disabled => "disabled".to_string(),
+        }
+    }
 }
 
 impl ToSql<TokenAcctStatusType, Pg> for TokenAcctStatus {
@@ -74,6 +87,21 @@ impl TokenAcctsInsertChannelPayload {
     pub fn parse_payload(
         json_str: &str,
     ) -> Result<TokenAcctsInsertChannelPayload, serde_json::Error> {
+        serde_json::from_str(json_str)
+    }
+}
+
+// todo setup serialization
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TokenAcctsStatusUpdateChannelPayload {
+    pub status: TokenAcctStatus,
+    pub token_acct: String,
+}
+
+impl TokenAcctsStatusUpdateChannelPayload {
+    pub fn parse_payload(
+        json_str: &str,
+    ) -> Result<TokenAcctsStatusUpdateChannelPayload, serde_json::Error> {
         serde_json::from_str(json_str)
     }
 }

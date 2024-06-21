@@ -1,37 +1,32 @@
 use std::sync::Arc;
 
+use super::balances;
 use crate::entities::conditional_vaults::conditional_vaults::dsl::*;
 use crate::entities::conditional_vaults::ConditionalVault;
 use crate::entities::transactions::Instruction;
 use crate::entities::transactions::Payload;
+use deadpool::managed::Object;
+use deadpool_diesel::Manager;
 use diesel::prelude::*;
 use diesel::PgConnection;
-use solana_client::nonblocking::pubsub_client::PubsubClient;
-
-use super::balances;
 
 pub async fn handle_redeem_conditional_tokens_tx(
-    connection: &mut PgConnection,
-    pub_sub_client: Option<Arc<PubsubClient>>,
+    conn_manager: Arc<Object<Manager<PgConnection>>>,
     transaction_payload: Payload,
     transaction_sig: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mint_instruction = find_mint_instruction(&transaction_payload)?;
     let authority_account = find_authority_account(&mint_instruction)?;
     let vault_account = find_vault_account(&mint_instruction)?;
-    let conditional_vault = get_conditional_vault(connection, &vault_account)?;
+    let conditional_vault =
+        get_conditional_vault(Arc::clone(&conn_manager), &vault_account).await?;
 
     let relevant_accounts =
         get_relevant_accounts_from_mint_and_vault(&mint_instruction, conditional_vault);
 
     for (token_account, mint_acct_value) in relevant_accounts {
-        let pub_sub: Option<Arc<PubsubClient>> = match pub_sub_client {
-            Some(ref pub_sub) => Some(Arc::clone(&pub_sub)),
-            None => None,
-        };
         balances::handle_token_acct_in_tx(
-            connection,
-            pub_sub,
+            Arc::clone(&conn_manager),
             transaction_payload.clone(),
             transaction_sig.clone(),
             &mint_acct_value,
@@ -83,14 +78,20 @@ fn find_vault_account(
         })
 }
 
-fn get_conditional_vault(
-    connection: &mut PgConnection,
+async fn get_conditional_vault(
+    conn_manager: Arc<Object<Manager<PgConnection>>>,
     vault_account: &str,
 ) -> Result<ConditionalVault, Box<dyn std::error::Error>> {
-    conditional_vaults
-        .filter(cond_vault_acct.eq(vault_account))
-        .first(connection)
-        .map_err(|err| Box::new(err) as Box<dyn std::error::Error>)
+    let vault_acct_clone = vault_account.to_string();
+    let vault = conn_manager
+        .interact(move |connection| {
+            conditional_vaults
+                .filter(cond_vault_acct.eq(vault_acct_clone))
+                .first(connection)
+        })
+        .await??;
+
+    Ok(vault)
 }
 
 fn get_relevant_accounts_from_mint_and_vault(

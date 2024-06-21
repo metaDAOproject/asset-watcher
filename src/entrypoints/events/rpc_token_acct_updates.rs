@@ -1,10 +1,13 @@
 use std::env;
 use std::sync::{Arc, MutexGuard};
 
-use diesel::{update, Connection, ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
+use deadpool::managed::Object;
+use deadpool_diesel::Manager;
+use diesel::{update, ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
 use futures::StreamExt;
 use solana_account_decoder::{UiAccount, UiAccountData};
 use solana_client::{nonblocking::pubsub_client::PubsubClient, rpc_config::RpcAccountInfoConfig};
+use solana_sdk::program_pack::Pack;
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 use std::sync::Mutex;
 use tokio::task;
@@ -12,10 +15,11 @@ use tokio::task;
 use crate::entities::token_accts::token_accts::{self};
 use crate::entities::token_accts::{TokenAcct, TokenAcctStatus};
 use crate::services::balances;
+use crate::services::transactions::handle_token_acct_balance_tx;
 
 pub async fn new_handler(
     pub_sub_client: Arc<PubsubClient>,
-    db: &mut PgConnection,
+    conn_manager: Arc<Object<Manager<PgConnection>>>,
     token_acct_pubkey: Pubkey,
     token_acct_record: TokenAcct,
 ) {
@@ -23,10 +27,22 @@ pub async fn new_handler(
         "subscribing to token acct: {}",
         token_acct_pubkey.to_string()
     );
-    // TODO: use the watching status to persist what accounts are being watched, if it's already being watched, then it should be
+
+    let rpc_endpoint = env::var("RPC_ENDPOINT_HTTP").expect("RPC_ENDPOINT_HTTP must be set");
+    if let Err(e) = check_and_update_initial_balance(
+        rpc_endpoint,
+        Arc::clone(&conn_manager),
+        &token_acct_pubkey,
+        &token_acct_record,
+    )
+    .await
+    {
+        eprintln!("Error during initial balance check: {:?}", e);
+    }
+
     let timeout_flag = Arc::new(Mutex::new(true));
     let timeout_flag_arc = Arc::clone(&timeout_flag);
-    // TODO this cannot be calling expect, we need to not panic here
+
     let account_subscribe_res = pub_sub_client
         .account_subscribe(
             &token_acct_pubkey,
@@ -47,12 +63,14 @@ pub async fn new_handler(
         return;
     }
 
-    // update token to watching status
-    update_token_acct_with_status(token_acct_pubkey.to_string(), TokenAcctStatus::Watching, db);
+    println!(
+        "successfully subscribed to token acct: {}",
+        token_acct_pubkey.to_string()
+    );
 
     let (mut subscription, unsubscribe) = account_subscribe_res.ok().unwrap();
 
-    // spawn that timeout task
+    let conn_manager_clone = Arc::clone(&conn_manager);
     task::spawn(async move {
         loop {
             tokio::time::sleep(std::time::Duration::new(60, 0)).await;
@@ -67,48 +85,53 @@ pub async fn new_handler(
             "timed out. unsubscribing from account: {}",
             token_acct_pubkey.to_string()
         );
-        // we have to construct a fresh connection here because of the new thread
-        let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-        let mut new_conn =
-            PgConnection::establish(&database_url).expect("could not establish connection");
         update_token_acct_with_status(
             token_acct_pubkey.to_string(),
             TokenAcctStatus::Enabled,
-            &mut new_conn,
-        );
+            conn_manager_clone,
+        )
+        .await;
         unsubscribe();
     });
 
+    println!(
+        "listening for next rpc account update: {}",
+        token_acct_pubkey.to_string()
+    );
+    let conn_manager_clone_sub = Arc::clone(&conn_manager);
     while let Some(val) = subscription.next().await {
-        // reset timeout flag
         let mut timeout_flag_val = timeout_flag.lock().unwrap();
         *timeout_flag_val = false;
         let ui_account: UiAccount = val.value;
         let context = val.context;
         println!("account subscribe context: {:?}", context);
-        // tODO handle the result
         match ui_account.data {
             UiAccountData::Binary(data, encoding) => {
                 println!("Binary data: {:?}, Encoding: {:?}", data, encoding);
-                // Process binary data here
             }
             UiAccountData::Json(data) => {
                 println!("account subscribe notification: {:?}", data);
                 let record_clone = token_acct_record.clone();
                 let token_acct_clone = record_clone.token_acct.clone();
-                let token_acct_update_res =
-                    balances::handle_token_acct_change(db, record_clone, data, context);
-                match token_acct_update_res {
-                    Ok(_) => {
-                        println!("successfully updated token balance: {:?}", token_acct_clone)
+                let conn_clone_for_task = Arc::clone(&conn_manager_clone_sub);
+                task::spawn(async move {
+                    let token_acct_update_res = balances::handle_token_acct_change(
+                        conn_clone_for_task,
+                        record_clone,
+                        data,
+                        context,
+                    )
+                    .await;
+                    match token_acct_update_res {
+                        Ok(_) => {
+                            println!("successfully updated token balance: {:?}", token_acct_clone)
+                        }
+                        Err(e) => println!("error kind: {:?}", e),
                     }
-                    Err(e) => println!("error kind: {:?}", e),
-                }
-                // Process JSON data here
+                });
             }
             UiAccountData::LegacyBinary(data) => {
                 println!("Parsed LegacyBinary data: {:?}", data);
-                // Process parsed JSON data here
             }
         }
     }
@@ -117,29 +140,98 @@ pub async fn new_handler(
         token_acct_pubkey.to_string()
     );
 
-    //update token back to enabled status
-    update_token_acct_with_status(token_acct_pubkey.to_string(), TokenAcctStatus::Enabled, db);
+    // enabling this seems questionable now... since when this function fires we will not reset things to
+    // update_token_acct_with_status(
+    //     token_acct_pubkey.to_string(),
+    //     TokenAcctStatus::Enabled,
+    //     conn_manager,
+    // )
+    // .await;
 }
 
-fn update_token_acct_with_status(
+async fn check_and_update_initial_balance(
+    rpc_endpoint: String,
+    conn_manager: Arc<Object<Manager<PgConnection>>>,
+    token_acct_pubkey: &Pubkey,
+    token_acct_record: &TokenAcct,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let rpc_client = solana_client::nonblocking::rpc_client::RpcClient::new(rpc_endpoint);
+    let account_data = rpc_client
+        .get_account_with_commitment(token_acct_pubkey, CommitmentConfig::confirmed())
+        .await?;
+
+    if let Some(account) = account_data.value {
+        let token_account: spl_token::state::Account =
+            spl_token::state::Account::unpack(&account.data)?;
+        let balance = token_account.amount as i64;
+
+        if token_acct_record.amount != balance {
+            if token_acct_record.amount != balance {
+                let latest_tx: Vec<
+                    solana_client::rpc_response::RpcConfirmedTransactionStatusWithSignature,
+                > = rpc_client
+                    .get_signatures_for_address(token_acct_pubkey)
+                    .await?
+                    .into_iter()
+                    .filter(|tx| tx.err.is_none())
+                    .collect();
+
+                if let Some(latest_tx_info) = latest_tx.first() {
+                    let transaction_sig = latest_tx_info.signature.clone();
+                    let slot = latest_tx_info.slot as i64;
+
+                    let mint_acct = token_account.mint.to_string();
+                    let owner_acct = token_account.owner.to_string();
+
+                    handle_token_acct_balance_tx(
+                        conn_manager,
+                        token_acct_pubkey.to_string(),
+                        balance,
+                        transaction_sig,
+                        slot,
+                        mint_acct,
+                        owner_acct,
+                    )
+                    .await?;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+// TODO this should return a result and be handled appropriately..
+async fn update_token_acct_with_status(
     token_acct: String,
     status: TokenAcctStatus,
-    db: &mut PgConnection,
+    conn_manager: Arc<Object<Manager<PgConnection>>>,
 ) {
-    //update token back to enabled status
-    let res = update(token_accts::table.filter(token_accts::token_acct.eq(token_acct.to_string())))
-        .set(token_accts::dsl::status.eq(status.clone()))
-        .get_result::<TokenAcct>(db);
+    let token_acct_query = token_acct.clone();
+    let status_for_set = status.clone();
+    let res = conn_manager
+        .interact(move |db| {
+            update(
+                token_accts::table.filter(token_accts::token_acct.eq(token_acct_query.to_string())),
+            )
+            .set(token_accts::dsl::status.eq(status_for_set))
+            .get_result::<TokenAcct>(db)
+        })
+        .await;
 
     match res {
-        Ok(_) => println!(
+        Ok(Ok(_)) => println!(
             "updated token acct to {:?} status: {}",
             status,
             token_acct.to_string()
         ),
         Err(e) => eprintln!(
-            "error updating token acct [{}] to watching status: {}",
-            token_acct, e
+            "error updating token acct [{}] to {:?} status: {}",
+            token_acct, status, e
+        ),
+        Ok(Err(e)) => eprintln!(
+            "error updating token acct [{}] to {:?} status: {}",
+            token_acct, status, e
         ),
     }
 }

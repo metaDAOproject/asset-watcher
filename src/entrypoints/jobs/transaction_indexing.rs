@@ -14,7 +14,7 @@ use diesel::prelude::*;
 pub async fn run_job(
     pg_connection: Arc<Object<Manager<PgConnection>>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let thirty_days_ago = Utc::now().naive_utc() - Duration::days(30);
+    let thirty_days_ago = Utc::now().naive_utc() - Duration::days(5);
 
     // Run the query
     let transactions =
@@ -24,7 +24,7 @@ pub async fn run_job(
     // Process each transaction
     for transaction in transactions {
         let pg_clone = Arc::clone(&pg_connection);
-        events::transactions_insert::index_tx_record(transaction, pg_clone, None).await?;
+        events::transactions_insert::index_tx_record(transaction, pg_clone).await?;
     }
     Ok(())
 }
