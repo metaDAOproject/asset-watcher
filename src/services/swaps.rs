@@ -1,5 +1,4 @@
 use std::io;
-use std::sync::Arc;
 
 use crate::entities::markets::markets;
 use crate::entities::markets::markets::market_acct;
@@ -8,13 +7,11 @@ use crate::entities::transactions::Instruction;
 use crate::entities::transactions::Payload;
 use diesel::prelude::*;
 use diesel::PgConnection;
-use solana_client::nonblocking::pubsub_client::PubsubClient;
 
 use super::balances;
 
 pub async fn handle_swap_tx(
     connection: &mut PgConnection,
-    pub_sub_client: Option<Arc<PubsubClient>>,
     transaction_payload: Payload,
     transaction_sig: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -44,13 +41,8 @@ pub async fn handle_swap_tx(
         get_relevant_accounts_from_ix_and_mints(&swap_instruction, base_mint, quote_mint);
 
     for (token_account, mint_acct_value) in relevant_accounts {
-        let pub_sub: Option<Arc<PubsubClient>> = match pub_sub_client {
-            Some(ref pub_sub) => Some(Arc::clone(&pub_sub)),
-            None => None,
-        };
         balances::handle_token_acct_in_tx(
             connection,
-            pub_sub,
             transaction_payload.clone(),
             transaction_sig.clone(),
             &mint_acct_value,

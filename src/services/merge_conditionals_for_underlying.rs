@@ -1,18 +1,14 @@
-use std::sync::Arc;
-
 use crate::entities::conditional_vaults::conditional_vaults::dsl::*;
 use crate::entities::conditional_vaults::ConditionalVault;
 use crate::entities::transactions::Instruction;
 use crate::entities::transactions::Payload;
 use diesel::prelude::*;
 use diesel::PgConnection;
-use solana_client::nonblocking::pubsub_client::PubsubClient;
 
 use super::balances;
 
 pub async fn handle_merge_conditional_tokens_tx(
     connection: &mut PgConnection,
-    pub_sub_client: Option<Arc<PubsubClient>>,
     transaction_payload: Payload,
     transaction_sig: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -25,13 +21,8 @@ pub async fn handle_merge_conditional_tokens_tx(
         get_relevant_accounts_from_mint_and_vault(&mint_instruction, conditional_vault);
 
     for (token_account, mint_acct_value) in relevant_accounts {
-        let pub_sub: Option<Arc<PubsubClient>> = match pub_sub_client {
-            Some(ref pub_sub) => Some(Arc::clone(&pub_sub)),
-            None => None,
-        };
         balances::handle_token_acct_in_tx(
             connection,
-            pub_sub,
             transaction_payload.clone(),
             transaction_sig.clone(),
             &mint_acct_value,

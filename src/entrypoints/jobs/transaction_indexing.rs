@@ -24,7 +24,7 @@ pub async fn run_job(
     // Process each transaction
     for transaction in transactions {
         let pg_clone = Arc::clone(&pg_connection);
-        events::transactions_insert::index_tx_record(transaction, pg_clone, None).await?;
+        events::transactions_insert::index_tx_record(transaction, pg_clone).await?;
     }
     Ok(())
 }

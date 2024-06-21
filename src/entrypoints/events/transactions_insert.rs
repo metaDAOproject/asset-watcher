@@ -6,7 +6,6 @@ use diesel::prelude::*;
 use diesel::{ExpressionMethods, PgConnection};
 use futures::executor::block_on;
 use postgres::Notification;
-use solana_client::nonblocking::pubsub_client::PubsubClient;
 use std::sync::Arc;
 
 use crate::entities::transactions::{transactions::dsl::*, Transaction};
@@ -14,19 +13,16 @@ use crate::entities::transactions::{transactions::dsl::*, Transaction};
 pub async fn new_handler(
     notification: Notification,
     pool_connection: Arc<Object<Manager<PgConnection>>>,
-    pub_sub_client: Arc<PubsubClient>,
 ) {
     println!(
         "new transactions table payload: {:?}",
         notification.payload()
     );
     match TransactionsInsertChannelPayload::parse_payload(notification.payload()) {
-        Ok(tx_payload) => {
-            match handle_new_transaction(tx_payload.tx_sig, pool_connection, pub_sub_client).await {
-                Ok(()) => println!("successfully handled new transaction notification"),
-                Err(e) => eprintln!("error handling new transaction notification: {:?}", e),
-            }
-        }
+        Ok(tx_payload) => match handle_new_transaction(tx_payload.tx_sig, pool_connection).await {
+            Ok(()) => println!("successfully handled new transaction notification"),
+            Err(e) => eprintln!("error handling new transaction notification: {:?}", e),
+        },
         Err(e) => eprintln!("error parsing new transaction notification: {:?}", e),
     };
 }
@@ -34,7 +30,6 @@ pub async fn new_handler(
 async fn handle_new_transaction(
     transaction_signature: String,
     connection: Arc<Object<Manager<PgConnection>>>,
-    pub_sub_client: Arc<PubsubClient>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let txn_result = connection
         .clone()
@@ -50,7 +45,7 @@ async fn handle_new_transaction(
     let txn_vec: Vec<Transaction> = txn_result?;
     let txn = &txn_vec[0];
 
-    index_tx_record(txn.clone(), connection, Some(pub_sub_client)).await?;
+    index_tx_record(txn.clone(), connection).await?;
 
     Ok(())
 }
@@ -58,7 +53,6 @@ async fn handle_new_transaction(
 pub async fn index_tx_record(
     tx: Transaction,
     connection: Arc<Object<Manager<PgConnection>>>,
-    pub_sub_client: Option<Arc<PubsubClient>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let payload_parsed = Payload::parse_payload(&tx.payload)?;
 
@@ -69,7 +63,6 @@ pub async fn index_tx_record(
                     .interact(move |conn| {
                         let mint_handler_res = services::new_mint::handle_mint_tx(
                             conn,
-                            pub_sub_client,
                             payload_parsed.clone(),
                             tx.tx_sig.clone(),
                         );
@@ -94,7 +87,6 @@ pub async fn index_tx_record(
                     .interact(move |conn| {
                         let swap_res = services::swaps::handle_swap_tx(
                             conn,
-                            pub_sub_client,
                             payload_parsed.clone(),
                             tx.tx_sig.clone(),
                         );
@@ -119,7 +111,6 @@ pub async fn index_tx_record(
                     .interact(move |conn| {
                         let amm_deposit_res = services::liquidity_adding::handle_lp_deposit_tx(
                             conn,
-                            pub_sub_client,
                             payload_parsed.clone(),
                             tx.tx_sig.clone(),
                         );
@@ -145,7 +136,6 @@ pub async fn index_tx_record(
                         let amm_withdrawal_res =
                             services::liquidity_removing::handle_lp_withdrawal_tx(
                                 conn,
-                                pub_sub_client,
                                 payload_parsed.clone(),
                                 tx.tx_sig.clone(),
                             );
@@ -171,7 +161,6 @@ pub async fn index_tx_record(
                         let merge_conditionals_res =
                             services::merge_conditionals_for_underlying::handle_merge_conditional_tokens_tx(
                                 conn,
-                                pub_sub_client,
                                 payload_parsed.clone(),
                                 tx.tx_sig.clone(),
                             );
@@ -197,7 +186,6 @@ pub async fn index_tx_record(
                         let merge_conditionals_res =
                             services::redeem_conditionals::handle_redeem_conditional_tokens_tx(
                                 conn,
-                                pub_sub_client,
                                 payload_parsed.clone(),
                                 tx.tx_sig.clone(),
                             );

@@ -5,17 +5,13 @@ use deadpool_diesel::Manager;
 use diesel::PgConnection;
 use solana_client::nonblocking::pubsub_client::PubsubClient;
 use tokio::sync::Mutex;
-use warp::http::Method;
 use warp::Filter;
 
 use crate::{entities::token_accts::WatchTokenBalancePayload, services::auth::AuthClient};
 
 use super::post_watch_token_acct;
 
-pub async fn listen_and_serve(
-    db: Arc<Object<Manager<PgConnection>>>,
-    rpc_pub_sub: Arc<PubsubClient>,
-) {
+pub async fn listen_and_serve(db: Arc<Object<Manager<PgConnection>>>) {
     let port = match env::var("PORT")
         .unwrap_or("8080".to_string())
         .parse::<u16>()
@@ -36,7 +32,6 @@ pub async fn listen_and_serve(
         .and(auth_filter)
         .and(watch_token_json_body())
         .and(with_db(db))
-        .and(with_rpc_pub_sub(rpc_pub_sub))
         .and_then(post_watch_token_acct::handler);
 
     let cors = warp::cors()

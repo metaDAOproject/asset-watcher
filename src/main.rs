@@ -50,9 +50,10 @@ async fn setup_event_listeners(
     client
         .batch_execute(
             "
-        LISTEN transactions_insert_channel;
-        LISTEN token_accts_insert_channel;
-    ",
+            LISTEN token_accts_insert_channel;
+            LISTEN token_accts_status_update_channel;
+            LISTEN transactions_insert_channel;
+            ",
         )
         .await
         .unwrap();
@@ -70,6 +71,12 @@ async fn setup_event_listeners(
                 }
                 "transactions_insert_channel" => {
                     task::spawn(entrypoints::events::transactions_insert::new_handler(
+                        n,
+                        connect_clone,
+                    ));
+                }
+                "token_accts_status_update_channel" => {
+                    task::spawn(entrypoints::events::token_accts_status_update::new_handler(
                         n,
                         connect_clone,
                         Arc::clone(&pub_sub_client),
@@ -92,16 +99,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pub_sub_client = adapters::rpc::get_pubsub_client().await?;
     let db = get_database_pool(&database_url).await?;
 
-    let pub_sub_clone = Arc::clone(&pub_sub_client);
     let db_clone = Arc::clone(&db);
 
-    run_jobs(Arc::clone(&db_clone)).await?;
+    // run_jobs(Arc::clone(&db_clone)).await?;
 
     let database_url_copy = database_url.clone();
     task::spawn(async move { setup_event_listeners(&database_url_copy, db, pub_sub_client).await });
 
     // run the API
-    entrypoints::http::routes::listen_and_serve(db_clone, pub_sub_clone).await;
+    entrypoints::http::routes::listen_and_serve(db_clone).await;
 
     println!("Received CTRL+C, shutting down.");
     Ok(())

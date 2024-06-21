@@ -1,24 +1,17 @@
 use chrono::Utc;
 use diesel::prelude::*;
 use diesel::PgConnection;
-use solana_client::nonblocking::pubsub_client::PubsubClient;
-use solana_sdk::pubkey::Pubkey;
-use std::env;
-use std::str::FromStr;
-use std::sync::Arc;
-use tokio::task;
 
 use crate::entities::token_acct_balances::token_acct_balances;
 use crate::entities::token_acct_balances::TokenAcctBalances;
-use crate::entities::token_accts::token_accts;
-use crate::entrypoints::events;
+// use crate::entrypoints::events;
 
 /**
  * Handles updating our DB for a tx that affects a token acct balance.
  */
+//TODO: create status Watching for updates on tx
 pub async fn handle_token_acct_balance_tx(
     connection: &mut PgConnection,
-    pub_sub_client: Option<Arc<PubsubClient>>,
     token_acct: String,
     new_balance: i64,
     transaction_sig: String,
@@ -80,29 +73,6 @@ pub async fn handle_token_acct_balance_tx(
         diesel::insert_into(token_acct_balances::table)
             .values(&new_token_acct_balance)
             .execute(connection)?;
-    }
-
-    match pub_sub_client {
-        Some(pub_sub_client) => {
-            let token_acct_record = token_accts::table
-                .filter(token_accts::dsl::token_acct.eq(&token_acct))
-                .first(connection)?;
-            let pub_key = Pubkey::from_str(&token_acct)?;
-            task::spawn(async move {
-                // we have to construct a fresh connection here because of the new thread
-                let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-                let mut connection_val =
-                    PgConnection::establish(&database_url).expect("could not establish connection");
-                events::rpc_token_acct_updates::new_handler(
-                    pub_sub_client,
-                    &mut connection_val,
-                    pub_key,
-                    token_acct_record,
-                )
-                .await
-            });
-        }
-        None => (),
     }
 
     Ok(())

@@ -13,10 +13,8 @@ use diesel::prelude::*;
 use diesel::PgConnection;
 use serde_json::Value;
 use solana_account_decoder::parse_account_data::ParsedAccount;
-use solana_client::nonblocking::pubsub_client::PubsubClient;
 use solana_client::rpc_response::RpcResponseContext;
 use std::io::ErrorKind;
-use std::sync::Arc;
 
 use super::transactions;
 
@@ -104,7 +102,6 @@ pub fn handle_token_acct_change(
 
 pub async fn handle_token_acct_in_tx(
     connection: &mut PgConnection,
-    pub_sub_client: Option<Arc<PubsubClient>>,
     transaction_payload: Payload,
     transaction_sig: String,
     mint_acct_value: &str,
@@ -145,7 +142,7 @@ pub async fn handle_token_acct_in_tx(
     };
 
     // Check if the token account already exists
-    let mut token_acct_record: Vec<TokenAcct> = token_accts
+    let token_acct_record: Vec<TokenAcct> = token_accts
         .filter(token_accts::dsl::token_acct.eq(token_account))
         .load::<TokenAcct>(connection)?;
 
@@ -160,30 +157,27 @@ pub async fn handle_token_acct_in_tx(
             updated_at: Some(Utc::now()),
         };
 
-        let token_acct_insertion_res: Result<TokenAcct, diesel::result::Error> =
-            diesel::insert_into(token_accts)
-                .values(&new_token_acct)
-                .get_result(connection);
-        let inserted_token_acct = token_acct_insertion_res?;
-        token_acct_record = vec![inserted_token_acct];
-    }
-
-    if !Vec::is_empty(&token_acct_record) {
-        let pub_sub: Option<Arc<PubsubClient>> = match pub_sub_client {
-            Some(ref pub_sub) => Some(Arc::clone(&pub_sub)),
-            None => None,
-        };
-        transactions::handle_token_acct_balance_tx(
-            connection,
-            pub_sub,
-            token_account.to_string(),
-            account_balance,
-            transaction_sig.clone(),
-            transaction_payload.slot,
-            mint_acct_value.to_string(),
-            authority_account.to_string(),
+        diesel::insert_into(token_accts)
+            .values(&new_token_acct)
+            .execute(connection)?;
+    } else {
+        // If the token account exists, make sure it is in watching status
+        diesel::update(
+            token_accts::table.filter(token_accts::token_acct.eq(token_account.to_string())),
         )
-        .await?;
+        .set(token_accts::status.eq(TokenAcctStatus::Watching))
+        .execute(connection)
+        .expect("Error updating token_accts");
     }
+    transactions::handle_token_acct_balance_tx(
+        connection,
+        token_account.to_string(),
+        account_balance,
+        transaction_sig.clone(),
+        transaction_payload.slot,
+        mint_acct_value.to_string(),
+        authority_account.to_string(),
+    )
+    .await?;
     Ok(())
 }
