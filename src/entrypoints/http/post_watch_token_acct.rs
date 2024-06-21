@@ -35,18 +35,19 @@ pub async fn handler(
     let token_acct_pubkey = message.token_acct.clone();
     let token_acct_for_query = token_acct_pubkey.clone();
 
-    let token_acct_res: Result<TokenAcct, deadpool_diesel::InteractError> = conn_manager
-        .interact(move |db| {
-            token_accts
-                .filter(token_accts::dsl::token_acct.eq(&token_acct_for_query))
-                .first::<TokenAcct>(db)
-                .expect("could not find token record")
-        })
-        .await;
+    let token_acct_res: Result<Result<Option<TokenAcct>, _>, deadpool_diesel::InteractError> =
+        conn_manager
+            .interact(move |db| {
+                token_accts
+                    .filter(token_accts::dsl::token_acct.eq(&token_acct_for_query))
+                    .first::<TokenAcct>(db)
+                    .optional()
+            })
+            .await;
 
     let token_acct_for_update = token_acct_pubkey.clone();
     match token_acct_res {
-        Ok(token_acct_record) => {
+        Ok(Ok(Some(token_acct_record))) => {
             // if already watching, we need to switch back to enabled and then back to make sure account subscribe reinits
             if token_acct_record.status == TokenAcctStatus::Watching {
                 let enabled_update_res = conn_manager
@@ -80,7 +81,23 @@ pub async fn handler(
         Err(e) => {
             return Ok(warp::reply::with_status(
                 warp::reply::json(&WatchTokenBalanceResponse {
-                    message: format!("could not find token_acct to update: {:?}", e),
+                    message: format!("error interacting with postgres pool: {:?}", e),
+                }),
+                response.status(),
+            ));
+        }
+        Ok(Err(e)) => {
+            return Ok(warp::reply::with_status(
+                warp::reply::json(&WatchTokenBalanceResponse {
+                    message: format!("error fetching token_acct to update: {:?}", e),
+                }),
+                response.status(),
+            ));
+        }
+        Ok(Ok(None)) => {
+            return Ok(warp::reply::with_status(
+                warp::reply::json(&WatchTokenBalanceResponse {
+                    message: format!("could not find token_acct to update"),
                 }),
                 response.status(),
             ));
