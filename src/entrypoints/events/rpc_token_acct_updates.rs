@@ -23,11 +23,6 @@ pub async fn new_handler(
     token_acct_pubkey: Pubkey,
     token_acct_record: TokenAcct,
 ) {
-    println!(
-        "subscribing to token acct: {}",
-        token_acct_pubkey.to_string()
-    );
-
     let rpc_endpoint = env::var("RPC_ENDPOINT_HTTP").expect("RPC_ENDPOINT_HTTP must be set");
     if let Err(e) = check_and_update_initial_balance(
         rpc_endpoint,
@@ -73,7 +68,8 @@ pub async fn new_handler(
     let conn_manager_clone = Arc::clone(&conn_manager);
     task::spawn(async move {
         loop {
-            tokio::time::sleep(std::time::Duration::new(60, 0)).await;
+            // 20 minute timeout for the length of a session
+            tokio::time::sleep(std::time::Duration::new(1200, 0)).await;
             let mut timeout_flag_val: MutexGuard<bool> = timeout_flag_arc.lock().unwrap();
             if *timeout_flag_val {
                 break;
@@ -93,11 +89,6 @@ pub async fn new_handler(
         .await;
         unsubscribe();
     });
-
-    println!(
-        "listening for next rpc account update: {}",
-        token_acct_pubkey.to_string()
-    );
     let conn_manager_clone_sub = Arc::clone(&conn_manager);
     while let Some(val) = subscription.next().await {
         let mut timeout_flag_val = timeout_flag.lock().unwrap();
