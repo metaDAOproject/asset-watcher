@@ -87,7 +87,7 @@ pub async fn new_handler(
             conn_manager_clone,
         )
         .await;
-        unsubscribe();
+        unsubscribe().await;
     });
     let conn_manager_clone_sub = Arc::clone(&conn_manager);
     while let Some(val) = subscription.next().await {
