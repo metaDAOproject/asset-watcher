@@ -19,7 +19,7 @@ pub async fn handle_token_acct_balance_tx(
     conn_manager: Arc<Object<Manager<PgConnection>>>,
     token_acct: String,
     new_balance: i64,
-    transaction_sig: String,
+    transaction_sig: Option<String>,
     slot: i64,
     mint_acct: String,
     owner_acct: String,
@@ -84,7 +84,7 @@ pub async fn handle_token_acct_balance_tx(
             amount: new_balance,
             delta,
             slot: slot,
-            tx_sig: Some(transaction_sig.clone()),
+            tx_sig: transaction_sig,
             created_at: Utc::now(),
         };
 

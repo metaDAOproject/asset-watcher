@@ -14,8 +14,11 @@ use tokio::task;
 
 use crate::entities::token_accts::token_accts::{self};
 use crate::entities::token_accts::{TokenAcct, TokenAcctStatus};
+use crate::entities::transactions::transactions::{self, tx_sig};
+use crate::entities::transactions::Transaction;
 use crate::services::balances;
 use crate::services::transactions::handle_token_acct_balance_tx;
+use diesel::OptionalExtension;
 
 pub async fn new_handler(
     pub_sub_client: Arc<PubsubClient>,
@@ -169,16 +172,31 @@ async fn check_and_update_initial_balance(
 
                 if let Some(latest_tx_info) = latest_tx.first() {
                     let transaction_sig = latest_tx_info.signature.clone();
-                    let slot = latest_tx_info.slot as i64;
+                    let transaction_sig_2 = latest_tx_info.signature.clone();
+                    let transaction_exists: Option<Transaction> = conn_manager
+                        .interact(move |db: &mut PgConnection| {
+                            transactions::table
+                                .filter(tx_sig.eq(transaction_sig.clone()))
+                                .first::<Transaction>(db)
+                                .optional()
+                        })
+                        .await??;
 
+                    let slot = latest_tx_info.slot as i64;
                     let mint_acct = token_account.mint.to_string();
                     let owner_acct = token_account.owner.to_string();
+
+                    let transaction_sig_option = if transaction_exists.is_some() {
+                        Some(transaction_sig_2)
+                    } else {
+                        None
+                    };
 
                     handle_token_acct_balance_tx(
                         conn_manager,
                         token_acct_pubkey.to_string(),
                         balance,
-                        transaction_sig,
+                        transaction_sig_option,
                         slot,
                         mint_acct,
                         owner_acct,
