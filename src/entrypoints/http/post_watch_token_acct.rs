@@ -6,6 +6,7 @@ use crate::entities::token_accts::TokenAcct;
 use crate::entities::token_accts::TokenAcctStatus;
 use crate::entities::token_accts::WatchTokenBalancePayload;
 use crate::entities::token_accts::WatchTokenBalanceResponse;
+use chrono::Utc;
 use deadpool::managed::Object;
 use deadpool_diesel::Manager;
 use diesel::prelude::*;
@@ -146,6 +147,9 @@ fn update_token_acct_with_status(
     db: &mut PgConnection,
 ) -> Result<TokenAcct, diesel::result::Error> {
     update(token_accts::table.filter(token_accts::token_acct.eq(token_acct_pubkey.to_string())))
-        .set(token_accts::dsl::status.eq(token_acct_status.clone()))
+        .set((
+            token_accts::dsl::status.eq(token_acct_status.clone()),
+            token_accts::dsl::updated_at.eq(Utc::now()),
+        ))
         .get_result::<TokenAcct>(db)
 }

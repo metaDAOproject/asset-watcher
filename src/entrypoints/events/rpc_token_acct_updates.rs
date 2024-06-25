@@ -1,6 +1,7 @@
 use std::env;
 use std::sync::{Arc, MutexGuard};
 
+use chrono::Utc;
 use deadpool::managed::Object;
 use deadpool_diesel::Manager;
 use diesel::{update, ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
@@ -199,7 +200,10 @@ async fn update_token_acct_with_status(
             update(
                 token_accts::table.filter(token_accts::token_acct.eq(token_acct_query.to_string())),
             )
-            .set(token_accts::dsl::status.eq(status_for_set))
+            .set((
+                token_accts::dsl::status.eq(status_for_set),
+                token_accts::dsl::updated_at.eq(Utc::now()),
+            ))
             .get_result::<TokenAcct>(db)
         })
         .await;

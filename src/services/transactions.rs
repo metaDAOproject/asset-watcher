@@ -104,7 +104,10 @@ pub async fn handle_token_acct_balance_tx(
             diesel::update(
                 token_accts::table.filter(token_accts::token_acct.eq(token_acct_clone_4)),
             )
-            .set(token_accts::amount.eq(new_balance))
+            .set((
+                token_accts::amount.eq(new_balance),
+                token_accts::dsl::updated_at.eq(Utc::now()),
+            ))
             .execute(db)
         })
         .await??;
