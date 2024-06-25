@@ -114,7 +114,10 @@ pub async fn handle_token_acct_change(
                 token_accts::table
                     .filter(token_accts::token_acct.eq(token_balance.token_acct.clone())),
             )
-            .set(token_accts::amount.eq(new_amount))
+            .set((
+                token_accts::amount.eq(new_amount),
+                token_accts::dsl::updated_at.eq(Utc::now()),
+            ))
             .execute(conn)
         })
         .await??;
@@ -208,7 +211,10 @@ pub async fn handle_token_acct_in_tx(
                 diesel::update(
                     token_accts::table.filter(token_accts::token_acct.eq(token_account_update)),
                 )
-                .set(token_accts::status.eq(TokenAcctStatus::Watching))
+                .set((
+                    token_accts::status.eq(TokenAcctStatus::Watching),
+                    token_accts::dsl::updated_at.eq(Utc::now()),
+                ))
                 .execute(db)
             })
             .await??;

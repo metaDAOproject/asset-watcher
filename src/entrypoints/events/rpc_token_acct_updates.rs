@@ -1,6 +1,7 @@
 use std::env;
 use std::sync::{Arc, MutexGuard};
 
+use chrono::Utc;
 use deadpool::managed::Object;
 use deadpool_diesel::Manager;
 use diesel::{update, ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
@@ -66,32 +67,8 @@ pub async fn new_handler(
         token_acct_pubkey.to_string()
     );
 
-    let (mut subscription, unsubscribe) = account_subscribe_res.ok().unwrap();
+    let (mut subscription, _) = account_subscribe_res.ok().unwrap();
 
-    let conn_manager_clone = Arc::clone(&conn_manager);
-    task::spawn(async move {
-        loop {
-            // 10 minute timeout for the length of a session
-            tokio::time::sleep(std::time::Duration::new(600, 0)).await;
-            let mut timeout_flag_val: MutexGuard<bool> = timeout_flag_arc.lock().unwrap();
-            if *timeout_flag_val {
-                break;
-            }
-
-            *timeout_flag_val = false;
-        }
-        println!(
-            "timed out. unsubscribing from account: {}",
-            token_acct_pubkey.to_string()
-        );
-        update_token_acct_with_status(
-            token_acct_pubkey.to_string(),
-            TokenAcctStatus::Enabled,
-            conn_manager_clone,
-        )
-        .await;
-        unsubscribe().await;
-    });
     let conn_manager_clone_sub = Arc::clone(&conn_manager);
     while let Some(val) = subscription.next().await {
         let mut timeout_flag_val = timeout_flag.lock().unwrap();
@@ -223,7 +200,10 @@ async fn update_token_acct_with_status(
             update(
                 token_accts::table.filter(token_accts::token_acct.eq(token_acct_query.to_string())),
             )
-            .set(token_accts::dsl::status.eq(status_for_set))
+            .set((
+                token_accts::dsl::status.eq(status_for_set),
+                token_accts::dsl::updated_at.eq(Utc::now()),
+            ))
             .get_result::<TokenAcct>(db)
         })
         .await;
