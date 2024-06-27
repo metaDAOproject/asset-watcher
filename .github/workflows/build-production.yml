@@ -36,19 +36,19 @@ jobs:
           tags: themetadao/asset-watcher:main
           labels: ${{ steps.meta.outputs.labels }}
 
-  # redeploy_app:
-  #   name: Redeploy app on Railway
-  #   needs: build_and_push
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Call Redeploy API
-  #       env:
-  #         RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-  #       run: |
-  #         echo railway toke: $RAILWAY_TOKEN
-  #         echo "Authorization: Bearer ${RAILWAY_TOKEN}"
-  #         curl https://backboard.railway.app/graphql/v2 \
-  #         -X POST \
-  #         -H "Authorization: Bearer ${RAILWAY_TOKEN}" \
-  #         -H "Content-Type: application/json" \
-  #         --data '{"query": "mutation serviceInstanceDeploy($serviceId: String!, $environmentId: String!) {\n  serviceInstanceDeploy(serviceId: $serviceId, environmentId: $environmentId)\n}\n", "variables": { "environmentId": "0942e3fe-8ec3-49b4-b8fb-26eb10b6e08f", "serviceId": "783719dc-3c30-437d-a3a9-b1aeb1d5c487" } }' 
+  redeploy_app:
+    name: Redeploy app on Railway
+    needs: build_and_push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Redeploy API
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          echo railway toke: $RAILWAY_TOKEN
+          echo "Authorization: Bearer ${RAILWAY_TOKEN}"
+          curl https://backboard.railway.app/graphql/v2 \
+          -X POST \
+          -H "Authorization: Bearer ${RAILWAY_TOKEN}" \
+          -H "Content-Type: application/json" \
+          --data '{"query": "mutation serviceInstanceDeploy($serviceId: String!, $environmentId: String!) {\n  serviceInstanceDeploy(serviceId: $serviceId, environmentId: $environmentId)\n}\n", "variables": { "environmentId": "0942e3fe-8ec3-49b4-b8fb-26eb10b6e08f", "serviceId": "bb01c469-2d71-42f1-ac50-02252f7d1669" } }' 
