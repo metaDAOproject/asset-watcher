@@ -14,7 +14,7 @@ use diesel::prelude::*;
 pub async fn run_job(
     pg_connection: Arc<Object<Manager<PgConnection>>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let thirty_days_ago = Utc::now().naive_utc() - Duration::minutes(50);
+    let thirty_days_ago = Utc::now().naive_utc() - Duration::days(30);
 
     // Run the query
     let transactions =
