@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::serialize::IsNull;
 use diesel::{
@@ -8,7 +9,6 @@ use diesel::{
 };
 use serde::{Deserialize, Serialize};
 use std::io::Write;
-use std::time::SystemTime;
 
 table! {
     token_accts (token_acct) {
@@ -16,7 +16,7 @@ table! {
         mint_acct -> Varchar,
         owner_acct -> Varchar,
         amount -> BigInt,
-        updated_at -> Nullable<Timestamp>,
+        updated_at -> Nullable<Timestamptz>,
         status -> crate::entities::token_accts::TokenAcctStatusType,
     }
 }
@@ -27,7 +27,7 @@ pub struct TokenAcct {
     pub mint_acct: String,
     pub owner_acct: String,
     pub amount: i64,
-    pub updated_at: Option<SystemTime>,
+    pub updated_at: Option<DateTime<Utc>>,
     pub status: TokenAcctStatus,
 }
 
@@ -35,12 +35,25 @@ pub struct TokenAcct {
 #[diesel(postgres_type(name = "token_acct_status"))]
 pub struct TokenAcctStatusType;
 
-#[derive(Debug, PartialEq, FromSqlRow, AsExpression, Eq, Clone, Hash, serde::Deserialize)]
+#[derive(
+    Debug, PartialEq, FromSqlRow, AsExpression, Eq, Clone, Hash, serde::Deserialize, Serialize,
+)]
 #[diesel(sql_type = TokenAcctStatusType)]
+#[serde(rename_all = "lowercase")]
 pub enum TokenAcctStatus {
     Watching,
     Enabled,
     Disabled,
+}
+
+impl ToString for TokenAcctStatus {
+    fn to_string(&self) -> String {
+        match self {
+            TokenAcctStatus::Watching => "watching".to_string(),
+            TokenAcctStatus::Enabled => "enabled".to_string(),
+            TokenAcctStatus::Disabled => "disabled".to_string(),
+        }
+    }
 }
 
 impl ToSql<TokenAcctStatusType, Pg> for TokenAcctStatus {
@@ -76,4 +89,30 @@ impl TokenAcctsInsertChannelPayload {
     ) -> Result<TokenAcctsInsertChannelPayload, serde_json::Error> {
         serde_json::from_str(json_str)
     }
+}
+
+// todo setup serialization
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TokenAcctsStatusUpdateChannelPayload {
+    pub status: TokenAcctStatus,
+    pub token_acct: String,
+}
+
+impl TokenAcctsStatusUpdateChannelPayload {
+    pub fn parse_payload(
+        json_str: &str,
+    ) -> Result<TokenAcctsStatusUpdateChannelPayload, serde_json::Error> {
+        serde_json::from_str(json_str)
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WatchTokenBalancePayload {
+    pub token_acct: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct WatchTokenBalanceResponse {
+    pub message: String,
 }

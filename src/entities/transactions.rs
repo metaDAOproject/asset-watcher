@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use diesel::pg::{Pg, PgValue};
 use diesel::{
     backend::Backend,
@@ -6,18 +7,29 @@ use diesel::{
     sql_types::Text,
 };
 use serde::{Deserialize, Serialize};
-use std::time::SystemTime;
 
 table! {
     transactions (tx_sig) {
         tx_sig -> Varchar,
         slot -> BigInt,
-        block_time -> Timestamp,
+        block_time -> Timestamptz,
         failed -> Bool,
         payload -> Text,
         serializer_logic_version -> SmallInt,
-        main_ix_type -> Varchar,
+        main_ix_type -> Nullable<Varchar>,
     }
+}
+
+#[derive(Queryable, Clone, Selectable)]
+#[diesel(table_name = transactions)]
+pub struct Transaction {
+    pub tx_sig: String,
+    pub slot: i64,
+    pub block_time: DateTime<Utc>,
+    pub failed: bool,
+    pub payload: String,
+    pub serializer_logic_version: i16,
+    pub main_ix_type: Option<InstructionType>,
 }
 
 #[derive(Debug, Clone, Copy, AsExpression, FromSqlRow)]
@@ -31,6 +43,8 @@ pub enum InstructionType {
     OpenbookCancelOrder,
     AutocratInitializeProposal,
     AutocratFinalizeProposal,
+    VaultMergeConditionalTokens,
+    VaultRedeemConditionalTokensForUnderlyingTokens,
 }
 
 impl<DB> ToSql<Text, DB> for InstructionType
@@ -52,6 +66,12 @@ where
                 "autocrat_initialize_proposal".to_sql(out)
             }
             InstructionType::AutocratFinalizeProposal => "autocrat_finalize_proposal".to_sql(out),
+            InstructionType::VaultMergeConditionalTokens => {
+                "vault_merge_conditional_tokens".to_sql(out)
+            }
+            InstructionType::VaultRedeemConditionalTokensForUnderlyingTokens => {
+                "vault_redeem_conditional_tokens_for_underlying_tokens".to_sql(out)
+            }
         }
     }
 }
@@ -67,28 +87,20 @@ impl FromSql<Text, Pg> for InstructionType {
             b"openbook_cancel_order" => Ok(InstructionType::OpenbookCancelOrder),
             b"autocrat_initialize_proposal" => Ok(InstructionType::AutocratInitializeProposal),
             b"autocrat_finalize_proposal" => Ok(InstructionType::AutocratFinalizeProposal),
+            b"vault_merge_conditional_tokens" => Ok(InstructionType::VaultMergeConditionalTokens),
+            b"vault_redeem_conditional_tokens_for_underlying_tokens" => {
+                Ok(InstructionType::VaultRedeemConditionalTokensForUnderlyingTokens)
+            }
             x => Err(format!("Unrecognized variant {:?}", x).into()),
         }
     }
 }
 
-#[derive(Queryable, Clone, Selectable)]
-#[diesel(table_name = transactions)]
-pub struct Transaction {
-    pub tx_sig: String,
-    pub slot: i64,
-    pub block_time: SystemTime,
-    pub failed: bool,
-    pub payload: String,
-    pub serializer_logic_version: i16,
-    pub main_ix_type: InstructionType,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Payload {
-    pub block_time: u64,
-    pub slot: u64,
+    pub block_time: i64,
+    pub slot: i64,
     pub recent_blockhash: String,
     pub compute_units_consumed: String,
     pub fee: String,
@@ -116,6 +128,12 @@ impl Payload {
                 }
                 "initializeProposal" => return Some(InstructionType::AutocratInitializeProposal),
                 "finalizeProposal" => return Some(InstructionType::AutocratFinalizeProposal),
+                "mergeConditionalTokensForUnderlyingTokens" => {
+                    return Some(InstructionType::VaultMergeConditionalTokens)
+                }
+                "redeemConditionalTokensForUnderlyingTokens" => {
+                    return Some(InstructionType::VaultRedeemConditionalTokensForUnderlyingTokens)
+                }
                 _ => continue,
             }
         }
@@ -123,7 +141,7 @@ impl Payload {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
     pub name: String,
@@ -136,7 +154,7 @@ pub struct Account {
     pub post_token_balance: Option<TokenBalance>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenBalance {
     pub mint: String,
@@ -145,7 +163,7 @@ pub struct TokenBalance {
     pub decimals: u8,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Instruction {
     pub name: String,
@@ -157,7 +175,7 @@ pub struct Instruction {
     pub args: Vec<Arg>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountWithData {
     pub name: String,
@@ -166,7 +184,7 @@ pub struct AccountWithData {
     pub is_writeable: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Arg {
     pub name: String,
     #[serde(rename = "type")]

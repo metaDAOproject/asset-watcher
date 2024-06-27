@@ -1,7 +1,7 @@
 use crate::entities::token_accts::token_accts;
 use crate::entities::token_accts::TokenAcct;
 use crate::entities::token_accts::TokenAcctsInsertChannelPayload;
-use crate::events::rpc_token_acct_updates;
+use crate::entrypoints::events::rpc_token_acct_updates;
 use deadpool::managed::Object;
 use deadpool_diesel::Manager;
 use diesel::prelude::*;
@@ -54,17 +54,16 @@ async fn handle_new_token_acct_notification(
         })
         .await?;
     let token_acct_pubkey = Pubkey::from_str(&token_acct_string)?;
-    let conn_manager_arg_clone = Arc::clone(&pool_connection);
     let pub_sub_client_clone = Arc::clone(&pub_sub_rpc_client);
 
     tokio::spawn(async move {
         rpc_token_acct_updates::new_handler(
             pub_sub_client_clone,
-            conn_manager_arg_clone,
+            cloned_connection,
             token_acct_pubkey,
             token_acct_record.clone(),
         )
-        .await
+        .await;
     })
     .await?;
 
