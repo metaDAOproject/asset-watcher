@@ -1,5 +1,5 @@
 use std::env;
-use std::sync::{Arc, MutexGuard};
+use std::sync::Arc;
 
 use chrono::Utc;
 use deadpool::managed::Object;
@@ -8,11 +8,11 @@ use diesel::{update, ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
 use futures::StreamExt;
 use solana_account_decoder::{UiAccount, UiAccountData};
 use solana_client::{nonblocking::pubsub_client::PubsubClient, rpc_config::RpcAccountInfoConfig};
-use solana_sdk::program_pack::Pack;
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 use std::sync::Mutex;
 use tokio::task;
 
+use crate::adapters;
 use crate::entities::token_accts::token_accts::{self};
 use crate::entities::token_accts::{TokenAcct, TokenAcctStatus};
 use crate::entities::transactions::transactions::{self, tx_sig};
@@ -40,7 +40,6 @@ pub async fn new_handler(
     }
 
     let timeout_flag = Arc::new(Mutex::new(true));
-    let timeout_flag_arc = Arc::clone(&timeout_flag);
 
     let account_subscribe_res = pub_sub_client
         .account_subscribe(
@@ -126,60 +125,59 @@ async fn check_and_update_initial_balance(
     token_acct_pubkey: &Pubkey,
     token_acct_record: &TokenAcct,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let rpc_client = solana_client::nonblocking::rpc_client::RpcClient::new(rpc_endpoint);
-    let account_data = rpc_client
-        .get_account_with_commitment(token_acct_pubkey, CommitmentConfig::confirmed())
-        .await?;
+    let rpc_client = Arc::new(solana_client::nonblocking::rpc_client::RpcClient::new(
+        rpc_endpoint,
+    ));
+    let token_account = adapters::rpc::get_token_account_by_address(
+        Arc::clone(&rpc_client),
+        token_acct_pubkey.to_string(),
+    )
+    .await?;
+    let balance = token_account.amount as i64;
 
-    if let Some(account) = account_data.value {
-        let token_account: spl_token::state::Account =
-            spl_token::state::Account::unpack(&account.data)?;
-        let balance = token_account.amount as i64;
-
+    if token_acct_record.amount != balance {
         if token_acct_record.amount != balance {
-            if token_acct_record.amount != balance {
-                let latest_tx: Vec<
-                    solana_client::rpc_response::RpcConfirmedTransactionStatusWithSignature,
-                > = rpc_client
-                    .get_signatures_for_address(token_acct_pubkey)
-                    .await?
-                    .into_iter()
-                    .filter(|tx| tx.err.is_none())
-                    .collect();
+            let latest_tx: Vec<
+                solana_client::rpc_response::RpcConfirmedTransactionStatusWithSignature,
+            > = rpc_client
+                .get_signatures_for_address(token_acct_pubkey)
+                .await?
+                .into_iter()
+                .filter(|tx| tx.err.is_none())
+                .collect();
 
-                if let Some(latest_tx_info) = latest_tx.first() {
-                    let transaction_sig = latest_tx_info.signature.clone();
-                    let transaction_sig_2 = latest_tx_info.signature.clone();
-                    let transaction_exists: Option<Transaction> = conn_manager
-                        .interact(move |db: &mut PgConnection| {
-                            transactions::table
-                                .filter(tx_sig.eq(transaction_sig.clone()))
-                                .first::<Transaction>(db)
-                                .optional()
-                        })
-                        .await??;
+            if let Some(latest_tx_info) = latest_tx.first() {
+                let transaction_sig = latest_tx_info.signature.clone();
+                let transaction_sig_2 = latest_tx_info.signature.clone();
+                let transaction_exists: Option<Transaction> = conn_manager
+                    .interact(move |db: &mut PgConnection| {
+                        transactions::table
+                            .filter(tx_sig.eq(transaction_sig.clone()))
+                            .first::<Transaction>(db)
+                            .optional()
+                    })
+                    .await??;
 
-                    let slot = latest_tx_info.slot as i64;
-                    let mint_acct = token_account.mint.to_string();
-                    let owner_acct = token_account.owner.to_string();
+                let slot = latest_tx_info.slot as i64;
+                let mint_acct = token_account.mint.to_string();
+                let owner_acct = token_account.owner.to_string();
 
-                    let transaction_sig_option = if transaction_exists.is_some() {
-                        Some(transaction_sig_2)
-                    } else {
-                        None
-                    };
+                let transaction_sig_option = if transaction_exists.is_some() {
+                    Some(transaction_sig_2)
+                } else {
+                    None
+                };
 
-                    handle_token_acct_balance_tx(
-                        conn_manager,
-                        token_acct_pubkey.to_string(),
-                        balance,
-                        transaction_sig_option,
-                        slot,
-                        mint_acct,
-                        owner_acct,
-                    )
-                    .await?;
-                }
+                handle_token_acct_balance_tx(
+                    conn_manager,
+                    token_acct_pubkey.to_string(),
+                    balance,
+                    transaction_sig_option,
+                    slot,
+                    mint_acct,
+                    owner_acct,
+                )
+                .await?;
             }
         }
     }
