@@ -1,0 +1,38 @@
+use crate::entities::{transactions::Instruction, deposits::UserDeposit};
+use crate::entities::deposits::user_deposits;
+use chrono::Utc;
+use diesel::{PgConnection, RunQueryDsl};
+use deadpool::managed::Object;
+use deadpool_diesel::Manager;
+use std::sync::Arc;
+
+pub async fn handle_deposit(
+    conn_manager: Arc<Object<Manager<PgConnection>>>,
+    tx_sig: String,
+    authority_account: String,
+    mint_instruction: &Instruction,
+    mint_acct: String,
+) -> Result<(), Box<dyn std::error::Error>> {
+
+    let amount: i64 = mint_instruction.args
+    .iter() // Create an iterator over the arguments
+    .find(|arg| arg.name == "amount") // Find the argument with the name "amount"
+    .map(|arg| arg.data.parse().expect("Failed to parse amount")) // Parse the data
+    .expect("Amount argument not found"); // Handle the case where the argument is not found
+
+    let deposit = UserDeposit::new(
+        authority_account, 
+        amount, 
+        mint_acct, 
+        tx_sig,
+    );
+    
+    conn_manager
+    .interact(move |db| {
+        diesel::insert_into(user_deposits::table)
+            .values(&deposit)
+            .execute(db)
+    }).await??;
+
+    Ok(())
+}

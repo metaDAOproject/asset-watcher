@@ -10,6 +10,7 @@ use diesel::prelude::*;
 use diesel::PgConnection;
 
 use super::balances;
+use super::deposits;
 
 pub async fn handle_mint_tx(
     conn_manager: Arc<Object<Manager<PgConnection>>>,
@@ -23,7 +24,7 @@ pub async fn handle_mint_tx(
         get_conditional_vault(Arc::clone(&conn_manager), &vault_account).await?;
 
     let relevant_accounts =
-        get_relevant_accounts_from_mint_and_vault(&mint_instruction, conditional_vault);
+        get_relevant_accounts_from_mint_and_vault(&mint_instruction, &conditional_vault);
 
     for (token_account, mint_acct_value) in relevant_accounts {
         balances::handle_token_acct_in_tx(
@@ -34,8 +35,16 @@ pub async fn handle_mint_tx(
             token_account,
             &authority_account,
         )
-        .await?
+        .await?;
     }
+
+    deposits::handle_deposit(
+        Arc::clone(&conn_manager),
+        transaction_sig,
+        authority_account,
+        &mint_instruction,
+        conditional_vault.underlying_mint_acct,
+    ).await?;
 
     Ok(())
 }
@@ -89,10 +98,10 @@ async fn get_conditional_vault(
     Ok(vault)
 }
 
-fn get_relevant_accounts_from_mint_and_vault(
-    mint_instruction: &crate::entities::transactions::Instruction,
-    conditional_vault: ConditionalVault,
-) -> Vec<(&str, String)> {
+fn get_relevant_accounts_from_mint_and_vault<'a>(
+    mint_instruction: &'a crate::entities::transactions::Instruction,
+    conditional_vault: &'a ConditionalVault,
+) -> Vec<(&'a str, String)> {
     // Collect the necessary "user" accounts to insert into token_accts
 
     let relevant_accounts: Vec<(&str, String)> = mint_instruction
