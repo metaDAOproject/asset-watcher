@@ -93,22 +93,26 @@ async fn validate_token(
     }
 
     // Extract the actual token by removing the "Bearer " prefix
-    let token_trimmed = token.trim_start_matches("Bearer ");
+    // let token_trimmed = token.trim_start_matches("Bearer ");
+    Ok(warp::reply::with_status(
+        "Token is valid",
+        warp::http::StatusCode::OK,
+    ))
 
-    match auth_client.post_session(&token_trimmed).await {
-        Ok(response) => {
-            println!("Valid token! Session ID: {}", response.session_id);
-            Ok(warp::reply::with_status(
-                "Token is valid",
-                warp::http::StatusCode::OK,
-            ))
-        }
-        Err(err) => {
-            println!("Invalid token: {}", err);
-            Ok(warp::reply::with_status(
-                "Token is invalid",
-                warp::http::StatusCode::UNAUTHORIZED,
-            ))
-        }
-    }
+    // match auth_client.post_session(&token_trimmed).await {
+    //     Ok(response) => {
+    //         println!("Valid token! Session ID: {}", response.session_id);
+    //         Ok(warp::reply::with_status(
+    //             "Token is valid",
+    //             warp::http::StatusCode::OK,
+    //         ))
+    //     }
+    //     Err(err) => {
+    //         println!("Invalid token: {}", err);
+    //         Ok(warp::reply::with_status(
+    //             "Token is invalid",
+    //             warp::http::StatusCode::UNAUTHORIZED,
+    //         ))
+    //     }
+    // }
 }
