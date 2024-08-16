@@ -7,15 +7,15 @@ use diesel::prelude::*;
 use diesel::PgConnection;
 
 use crate::entities::conditional_vaults::conditional_vaults::dsl::*;
+use crate::entities::conditional_vaults::ConditionalVault;
+use crate::entities::markets::markets;
+use crate::entities::markets::markets::market_acct;
+use crate::entities::markets::Market;
 use crate::entities::token_acct_balances::token_acct_balances;
 use crate::entities::token_acct_balances::TokenAcctBalances;
 use crate::entities::token_accts::token_accts;
-use crate::entities::conditional_vaults::ConditionalVault;
 use crate::entities::transactions::Instruction;
 use crate::entities::transactions::Payload;
-use crate::entities::markets::Market;
-use crate::entities::markets::markets;
-use crate::entities::markets::markets::market_acct;
 // use crate::entrypoints::events;
 
 /**
@@ -122,7 +122,6 @@ pub async fn handle_token_acct_balance_tx(
     Ok(())
 }
 
-
 pub fn find_instruction(
     transaction_payload: &Payload,
     instruction_name: &str,
@@ -173,10 +172,10 @@ pub async fn get_conditional_vault(
     Ok(vault)
 }
 
-pub fn get_relevant_accounts_from_mint_and_vault(
-    mint_instruction: &Instruction,
-    conditional_vault: ConditionalVault,
-) -> Vec<(&str, String)> {
+pub fn get_relevant_accounts_from_mint_and_vault<'a>(
+    mint_instruction: &'a Instruction,
+    conditional_vault: &ConditionalVault,
+) -> Vec<(&'a str, String)> {
     // Collect the necessary "user" accounts to insert into token_accts
 
     let relevant_accounts: Vec<(&str, String)> = mint_instruction
