@@ -99,8 +99,8 @@ async fn get_conditional_vault(
 }
 
 fn get_relevant_accounts_from_mint_and_vault<'a>(
-    mint_instruction: &'a crate::entities::transactions::Instruction,
-    conditional_vault: &'a ConditionalVault,
+    mint_instruction: &'a Instruction,
+    conditional_vault: &ConditionalVault,
 ) -> Vec<(&'a str, String)> {
     // Collect the necessary "user" accounts to insert into token_accts
 
