@@ -17,8 +17,8 @@ pub async fn handle_deposit(
     let amount: i64 = mint_instruction.args
     .iter() // Create an iterator over the arguments
     .find(|arg| arg.name == "amount") // Find the argument with the name "amount"
-    .map(|arg| arg.data.parse().expect("Failed to parse amount")) // Parse the data
-    .expect("Amount argument not found"); // Handle the case where the argument is not found
+    .and_then(|arg| arg.data.parse().ok()) // Parse the data
+    .unwrap_or(0); // Handle the case where the argument is not found
 
     let deposit = UserDeposit::new(
         authority_account, 
