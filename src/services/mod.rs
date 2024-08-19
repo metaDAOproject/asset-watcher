@@ -7,3 +7,4 @@ pub mod new_mint;
 pub mod redeem_conditionals;
 pub mod swaps;
 pub mod transactions;
+pub mod deposits;

@@ -5,3 +5,4 @@ pub mod token_acct_balances;
 pub mod token_accts;
 pub mod tokens;
 pub mod transactions;
+pub mod deposits;

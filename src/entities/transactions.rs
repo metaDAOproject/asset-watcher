@@ -189,7 +189,7 @@ pub struct Arg {
     pub name: String,
     #[serde(rename = "type")]
     arg_type: String,
-    data: String,
+    pub data: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
