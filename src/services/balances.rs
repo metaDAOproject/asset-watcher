@@ -128,7 +128,7 @@ pub async fn handle_token_acct_change(
 // TODO make this be able to run without updating token_acct to watching
 pub async fn handle_token_acct_in_tx(
     conn_manager: Arc<Object<Manager<PgConnection>>>,
-    transaction_payload: Payload,
+    transaction_payload: &Payload,
     transaction_sig: String,
     mint_acct_value: &str,
     token_account: &str,

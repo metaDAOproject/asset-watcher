@@ -6,9 +6,16 @@ use deadpool_diesel::Manager;
 use diesel::prelude::*;
 use diesel::PgConnection;
 
+use crate::entities::conditional_vaults::conditional_vaults::dsl::*;
 use crate::entities::token_acct_balances::token_acct_balances;
 use crate::entities::token_acct_balances::TokenAcctBalances;
 use crate::entities::token_accts::token_accts;
+use crate::entities::conditional_vaults::ConditionalVault;
+use crate::entities::transactions::Instruction;
+use crate::entities::transactions::Payload;
+use crate::entities::markets::Market;
+use crate::entities::markets::markets;
+use crate::entities::markets::markets::market_acct;
 // use crate::entrypoints::events;
 
 /**
@@ -113,4 +120,119 @@ pub async fn handle_token_acct_balance_tx(
         .await??;
 
     Ok(())
+}
+
+
+pub fn find_instruction(
+    transaction_payload: &Payload,
+    instruction_name: &str,
+) -> Result<Instruction, Box<dyn std::error::Error>> {
+    transaction_payload
+        .instructions
+        .iter()
+        .find(|instruction| instruction.name == instruction_name.to_string())
+        .cloned()
+        .ok_or_else(|| "Instruction not found".into())
+}
+
+pub fn find_authority_account(
+    mint_instruction: &Instruction,
+) -> Result<String, Box<dyn std::error::Error>> {
+    mint_instruction
+        .accounts_with_data
+        .iter()
+        .find(|account| account.name == "authority")
+        .map(|account| account.pubkey.clone())
+        .ok_or_else(|| "Authority account not found in mintConditionalTokens instruction".into())
+}
+
+pub fn find_vault_account(
+    mint_instruction: &Instruction,
+) -> Result<String, Box<dyn std::error::Error>> {
+    mint_instruction
+        .accounts_with_data
+        .iter()
+        .find(|account| account.name == "vault")
+        .map(|account| account.pubkey.clone())
+        .ok_or_else(|| "Vault account not found in mintConditionalTokens instruction".into())
+}
+
+pub async fn get_conditional_vault(
+    conn_manager: Arc<Object<Manager<PgConnection>>>,
+    vault_account: &str,
+) -> Result<ConditionalVault, Box<dyn std::error::Error>> {
+    let vault_acct_clone = vault_account.to_string();
+    let vault = conn_manager
+        .interact(move |connection| {
+            conditional_vaults
+                .filter(cond_vault_acct.eq(vault_acct_clone))
+                .first(connection)
+        })
+        .await??;
+
+    Ok(vault)
+}
+
+pub fn get_relevant_accounts_from_mint_and_vault(
+    mint_instruction: &Instruction,
+    conditional_vault: ConditionalVault,
+) -> Vec<(&str, String)> {
+    // Collect the necessary "user" accounts to insert into token_accts
+
+    let relevant_accounts: Vec<(&str, String)> = mint_instruction
+        .accounts_with_data
+        .iter()
+        .filter_map(|account| {
+            let vault_clone = conditional_vault.clone();
+            match account.name.as_str() {
+                "userConditionalOnFinalizeTokenAccount" => Some((
+                    account.pubkey.as_str(),
+                    vault_clone.cond_finalize_token_mint_acct,
+                )),
+                "userConditionalOnRevertTokenAccount" => Some((
+                    account.pubkey.as_str(),
+                    vault_clone.cond_revert_token_mint_acct,
+                )),
+                "userUnderlyingTokenAccount" => {
+                    Some((account.pubkey.as_str(), vault_clone.underlying_mint_acct))
+                }
+                _ => None,
+            }
+        })
+        .collect();
+    relevant_accounts
+}
+
+pub fn get_relevant_accounts_from_ix_and_mints(
+    mint_instruction: &Instruction,
+    base_mint: String,
+    quote_mint: String,
+) -> Vec<(&str, String)> {
+    // Collect the necessary "user" accounts to insert into token_accts
+
+    let relevant_accounts: Vec<(&str, String)> = mint_instruction
+        .accounts_with_data
+        .iter()
+        .filter_map(|account| match account.name.as_str() {
+            "userBaseAccount" => Some((account.pubkey.as_str(), base_mint.clone())),
+            "userQuoteAccount" => Some((account.pubkey.as_str(), quote_mint.clone())),
+            _ => None,
+        })
+        .collect();
+    relevant_accounts
+}
+
+pub async fn find_base_and_quote_mint(
+    amm_acct: String,
+    conn_manager: Arc<Object<Manager<PgConnection>>>,
+) -> Result<(String, String), Box<dyn std::error::Error>> {
+    let amm_market: Market = conn_manager
+        .interact(|connection| {
+            markets::table
+                .filter(market_acct.eq(amm_acct))
+                .first(connection)
+        })
+        .await??;
+
+    Ok((amm_market.base_mint_acct, amm_market.quote_mint_acct))
 }

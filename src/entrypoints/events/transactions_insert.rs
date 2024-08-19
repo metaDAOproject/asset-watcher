@@ -50,7 +50,7 @@ async fn handle_new_transaction(
     Ok(())
 }
 
-pub async fn index_tx_record(
+pub async fn index_tx_record(     
     tx: Transaction,
     connection: Arc<Object<Manager<PgConnection>>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -61,7 +61,7 @@ pub async fn index_tx_record(
             InstructionType::VaultMintConditionalTokens => {
                 let mint_handler_res = services::new_mint::handle_mint_tx(
                     connection,
-                    payload_parsed.clone(),
+                    &payload_parsed,
                     tx.tx_sig.clone(),
                 );
 
@@ -81,7 +81,7 @@ pub async fn index_tx_record(
             InstructionType::AmmSwap => {
                 let swap_res = services::swaps::handle_swap_tx(
                     connection,
-                    payload_parsed.clone(),
+                    &payload_parsed,
                     tx.tx_sig.clone(),
                 );
 
@@ -99,9 +99,9 @@ pub async fn index_tx_record(
                 }
             }
             InstructionType::AmmDeposit => {
-                let amm_deposit_res = services::liquidity_adding::handle_lp_deposit_tx(
+                let amm_deposit_res = services::liquidity::handle_lp_deposit_tx(
                     connection,
-                    payload_parsed.clone(),
+                    &payload_parsed,
                     tx.tx_sig.clone(),
                 );
 
@@ -119,9 +119,9 @@ pub async fn index_tx_record(
                 }
             }
             InstructionType::AmmWithdraw => {
-                let amm_withdrawal_res = services::liquidity_removing::handle_lp_withdrawal_tx(
+                let amm_withdrawal_res = services::liquidity::handle_lp_withdrawal_tx(
                     connection,
-                    payload_parsed.clone(),
+                    &payload_parsed,
                     tx.tx_sig.clone(),
                 );
 
@@ -142,7 +142,7 @@ pub async fn index_tx_record(
                 let merge_conditionals_res =
                     services::merge_conditionals_for_underlying::handle_merge_conditional_tokens_tx(
                         connection,
-                        payload_parsed.clone(),
+                        &payload_parsed,
                         tx.tx_sig.clone(),
                     );
 
@@ -163,7 +163,7 @@ pub async fn index_tx_record(
                 let redeem_conditionals_res =
                     services::redeem_conditionals::handle_redeem_conditional_tokens_tx(
                         connection,
-                        payload_parsed.clone(),
+                        &payload_parsed,
                         tx.tx_sig.clone(),
                     );
 
