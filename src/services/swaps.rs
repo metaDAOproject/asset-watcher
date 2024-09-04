@@ -15,7 +15,7 @@ pub async fn handle_swap_tx(
     transaction_sig: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let swap_instruction = find_swap_instruction(&transaction_payload)?;
-    let authority_account = transactions::find_authority_account(&swap_instruction)?;
+    let user_account = transactions::find_user_account(&swap_instruction)?;
     let amm_acct = swap_instruction
         .accounts_with_data
         .iter()
@@ -47,7 +47,7 @@ pub async fn handle_swap_tx(
             transaction_sig.clone(),
             &mint_acct_value,
             token_account,
-            &authority_account,
+            &user_account,
         )
         .await?
     }

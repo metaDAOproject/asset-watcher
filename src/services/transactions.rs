@@ -134,6 +134,17 @@ pub fn find_instruction(
         .ok_or_else(|| "Instruction not found".into())
 }
 
+pub fn find_user_account(
+    swap_instruction: &Instruction,
+) -> Result<String, Box<dyn std::error::Error>> {
+    swap_instruction
+        .accounts_with_data
+        .iter()
+        .find(|account| account.name == "user")
+        .map(|account| account.pubkey.clone())
+        .ok_or_else(|| "User account not found in swap instruction".into())
+}
+
 pub fn find_authority_account(
     mint_instruction: &Instruction,
 ) -> Result<String, Box<dyn std::error::Error>> {
