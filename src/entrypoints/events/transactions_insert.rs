@@ -56,7 +56,7 @@ pub async fn index_tx_record(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let payload_parsed = Payload::parse_payload(&tx.payload)?;
 
-    match payload_parsed.get_main_ix_type() {
+    match tx.main_ix_type {
         Some(ix_type) => match ix_type {
             InstructionType::VaultMintAndAmmSwap => {
                 index_mint_ix(Arc::clone(&connection), &payload_parsed, tx.tx_sig.clone()).await;

@@ -84,6 +84,7 @@ impl FromSql<Text, Pg> for InstructionType {
     fn from_sql(bytes: PgValue<'_>) -> deserialize::Result<Self> {
         match bytes.as_bytes() {
             b"vault_mint_conditional_tokens" => Ok(InstructionType::VaultMintConditionalTokens),
+            b"vault_mint_and_amm_swap" => Ok(InstructionType::VaultMintAndAmmSwap),
             b"amm_swap" => Ok(InstructionType::AmmSwap),
             b"amm_deposit" => Ok(InstructionType::AmmDeposit),
             b"amm_withdraw" => Ok(InstructionType::AmmWithdraw),
