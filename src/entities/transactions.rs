@@ -36,6 +36,7 @@ pub struct Transaction {
 #[sql_type = "Text"]
 pub enum InstructionType {
     VaultMintConditionalTokens,
+    VaultMintAndAmmSwap,
     AmmSwap,
     AmmDeposit,
     AmmWithdraw,
@@ -56,6 +57,9 @@ where
         match self {
             InstructionType::VaultMintConditionalTokens => {
                 "vault_mint_conditional_tokens".to_sql(out)
+            }
+            InstructionType::VaultMintAndAmmSwap => {
+                "vault_mint_and_amm_swap".to_sql(out)
             }
             InstructionType::AmmSwap => "amm_swap".to_sql(out),
             InstructionType::AmmDeposit => "amm_deposit".to_sql(out),

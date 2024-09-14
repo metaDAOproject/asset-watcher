@@ -43,7 +43,7 @@ async fn handle_new_transaction(
         .await?;
 
     let txn_vec: Vec<Transaction> = txn_result?;
-    let txn = &txn_vec[0];
+    let txn: &Transaction = &txn_vec[0];
 
     index_tx_record(txn.clone(), connection).await?;
 
@@ -58,45 +58,15 @@ pub async fn index_tx_record(
 
     match payload_parsed.get_main_ix_type() {
         Some(ix_type) => match ix_type {
+            InstructionType::VaultMintAndAmmSwap => {
+                index_mint_ix(Arc::clone(&connection), &payload_parsed, tx.tx_sig.clone()).await;
+                index_swap_ix(connection, &payload_parsed, tx.tx_sig).await;
+            }
             InstructionType::VaultMintConditionalTokens => {
-                let mint_handler_res = services::new_mint::handle_mint_tx(
-                    connection,
-                    &payload_parsed,
-                    tx.tx_sig.clone(),
-                );
-
-                let mint_handler_res_awaited = block_on(mint_handler_res);
-                match mint_handler_res_awaited {
-                    Ok(_) => println!(
-                        "handled new mint tx: {:?}, {:?}",
-                        payload_parsed.signatures,
-                        payload_parsed.get_main_ix_type()
-                    ),
-                    Err(e) => eprintln!(
-                        "error tracking new mint: {:?}. payload instructions: {:?}",
-                        e, payload_parsed.instructions
-                    ),
-                }
+                index_mint_ix(Arc::clone(&connection), &payload_parsed, tx.tx_sig.clone()).await;
             }
             InstructionType::AmmSwap => {
-                let swap_res = services::swaps::handle_swap_tx(
-                    connection,
-                    &payload_parsed,
-                    tx.tx_sig.clone(),
-                );
-
-                let swap_res_awaited = block_on(swap_res);
-                match swap_res_awaited {
-                    Ok(_) => println!(
-                        "handled swap tx: {:?}, {:?}",
-                        payload_parsed.signatures,
-                        payload_parsed.get_main_ix_type()
-                    ),
-                    Err(e) => eprintln!(
-                        "error tracking swap: {:?}. payload: {:?}",
-                        e, payload_parsed
-                    ),
-                }
+                index_swap_ix(connection, &payload_parsed, tx.tx_sig).await;
             }
             InstructionType::AmmDeposit => {
                 let amm_deposit_res = services::liquidity::handle_lp_deposit_tx(
@@ -186,4 +156,45 @@ pub async fn index_tx_record(
     }
 
     Ok(())
+}
+
+async fn index_swap_ix(connection: Arc<Object<Manager<PgConnection>>>, payload_parsed: &Payload, transaction_sig: String) {
+    let swap_res = services::swaps::handle_swap_tx(
+        connection,
+        &payload_parsed,
+        transaction_sig,
+    );
+
+    let swap_res_awaited = block_on(swap_res);
+    match swap_res_awaited {
+        Ok(_) => println!(
+            "handled swap tx: {:?}, {:?}",
+            payload_parsed.signatures,
+            payload_parsed.get_main_ix_type()
+        ),
+        Err(e) => eprintln!(
+            "error tracking swap: {:?}. payload: {:?}",
+            e, payload_parsed
+        ),
+    }
+}
+async fn index_mint_ix(connection: Arc<Object<Manager<PgConnection>>>, payload_parsed: &Payload, transaction_sig: String) {
+    let mint_handler_res = services::new_mint::handle_mint_tx(
+        Arc::clone(&connection),
+        &payload_parsed,
+        transaction_sig,
+    );
+
+    let mint_handler_res_awaited = block_on(mint_handler_res);
+    match mint_handler_res_awaited {
+        Ok(_) => println!(
+            "handled new mint tx: {:?}, {:?}",
+            payload_parsed.signatures,
+            payload_parsed.get_main_ix_type()
+        ),
+        Err(e) => eprintln!(
+            "error tracking new mint: {:?}. payload instructions: {:?}",
+            e, payload_parsed.instructions
+        ),
+    }
 }
