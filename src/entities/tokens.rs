@@ -1,3 +1,4 @@
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 
 table! {
@@ -5,7 +6,7 @@ table! {
         mint_acct -> Varchar,
         name -> Varchar,
         symbol -> Varchar,
-        supply -> BigInt,
+        supply -> Numeric,
         decimals -> SmallInt,
         updated_at -> Timestamptz,
         image_url -> Nullable<Varchar>,
@@ -18,7 +19,7 @@ pub struct Token {
     pub mint_acct: String,
     pub name: String,
     pub symbol: String,
-    pub supply: i64,
+    pub supply: BigDecimal,
     pub decimals: i16,
     pub updated_at: DateTime<Utc>,
     pub image_url: Option<String>,

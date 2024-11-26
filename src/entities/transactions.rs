@@ -7,11 +7,12 @@ use diesel::{
     sql_types::Text,
 };
 use serde::{Deserialize, Serialize};
+use bigdecimal::BigDecimal;
 
 table! {
     transactions (tx_sig) {
         tx_sig -> Varchar,
-        slot -> BigInt,
+        slot -> Numeric,
         block_time -> Timestamptz,
         failed -> Bool,
         payload -> Text,
@@ -24,7 +25,7 @@ table! {
 #[diesel(table_name = transactions)]
 pub struct Transaction {
     pub tx_sig: String,
-    pub slot: i64,
+    pub slot: BigDecimal,
     pub block_time: DateTime<Utc>,
     pub failed: bool,
     pub payload: String,
@@ -46,6 +47,7 @@ pub enum InstructionType {
     AutocratFinalizeProposal,
     VaultMergeConditionalTokens,
     VaultRedeemConditionalTokensForUnderlyingTokens,
+    VaultMintAndAMMSwap,
 }
 
 impl<DB> ToSql<Text, DB> for InstructionType
@@ -76,6 +78,9 @@ where
             InstructionType::VaultRedeemConditionalTokensForUnderlyingTokens => {
                 "vault_redeem_conditional_tokens_for_underlying_tokens".to_sql(out)
             }
+            InstructionType::VaultMintAndAMMSwap => {
+              "vault_mint_and_amm_swap".to_sql(out)
+          }
         }
     }
 }
@@ -93,6 +98,7 @@ impl FromSql<Text, Pg> for InstructionType {
             b"autocrat_initialize_proposal" => Ok(InstructionType::AutocratInitializeProposal),
             b"autocrat_finalize_proposal" => Ok(InstructionType::AutocratFinalizeProposal),
             b"vault_merge_conditional_tokens" => Ok(InstructionType::VaultMergeConditionalTokens),
+            b"vault_mint_and_amm_swap" => Ok(InstructionType::VaultMergeConditionalTokens),
             b"vault_redeem_conditional_tokens_for_underlying_tokens" => {
                 Ok(InstructionType::VaultRedeemConditionalTokensForUnderlyingTokens)
             }
