@@ -1,5 +1,6 @@
 use crate::entities::deposits::user_deposits;
 use crate::entities::{deposits::UserDeposit, transactions::Instruction};
+use bigdecimal::BigDecimal;
 use chrono::Utc;
 use deadpool::managed::Object;
 use deadpool_diesel::Manager;
@@ -20,7 +21,7 @@ pub async fn handle_deposit(
         .and_then(|arg| arg.data.parse().ok()) // Parse the data
         .unwrap_or(0); // Handle the case where the argument is not found
 
-    let deposit = UserDeposit::new(authority_account, amount, mint_acct, tx_sig);
+    let deposit = UserDeposit::new(authority_account, BigDecimal::from(amount), mint_acct, tx_sig);
 
     conn_manager
         .interact(move |db| {

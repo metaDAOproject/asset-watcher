@@ -9,13 +9,14 @@ use diesel::{
 };
 use serde::{Deserialize, Serialize};
 use std::io::Write;
+use bigdecimal::BigDecimal;
 
 table! {
     token_accts (token_acct) {
         token_acct -> Varchar,
         mint_acct -> Varchar,
         owner_acct -> Varchar,
-        amount -> BigInt,
+        amount -> Numeric,
         updated_at -> Nullable<Timestamptz>,
         status -> crate::entities::token_accts::TokenAcctStatusType,
     }
@@ -26,7 +27,7 @@ pub struct TokenAcct {
     pub token_acct: String,
     pub mint_acct: String,
     pub owner_acct: String,
-    pub amount: i64,
+    pub amount: BigDecimal,
     pub updated_at: Option<DateTime<Utc>>,
     pub status: TokenAcctStatus,
 }

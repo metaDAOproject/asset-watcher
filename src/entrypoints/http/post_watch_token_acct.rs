@@ -8,6 +8,7 @@ use crate::entities::token_accts::TokenAcct;
 use crate::entities::token_accts::TokenAcctStatus;
 use crate::entities::token_accts::WatchTokenBalancePayload;
 use crate::entities::token_accts::WatchTokenBalanceResponse;
+use bigdecimal::BigDecimal;
 use chrono::Utc;
 use deadpool::managed::Object;
 use deadpool_diesel::Manager;
@@ -154,7 +155,7 @@ pub async fn handler(
                 let new_token_acct = TokenAcct {
                     token_acct: token_acct_for_insert.clone(),
                     owner_acct: token_account.owner.to_string(),
-                    amount: 0,
+                    amount: BigDecimal::from(0),
                     status: TokenAcctStatus::Watching,
                     mint_acct: token_account.mint.to_string(),
                     updated_at: Some(Utc::now()),

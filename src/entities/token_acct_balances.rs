@@ -1,3 +1,4 @@
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 
 table! {
@@ -5,11 +6,11 @@ table! {
         token_acct -> Varchar,
         mint_acct -> Varchar,
         owner_acct -> Varchar,
-        amount -> BigInt,
+        amount -> Numeric,
         created_at -> Timestamptz,
-        slot -> BigInt,
+        slot -> Numeric,
         tx_sig -> Nullable<Varchar>,
-        delta -> BigInt,
+        delta -> Numeric,
     }
 }
 
@@ -20,9 +21,9 @@ pub struct TokenAcctBalances {
     pub token_acct: String,
     pub mint_acct: String,
     pub owner_acct: String,
-    pub amount: i64,
+    pub amount: BigDecimal,
     pub created_at: DateTime<Utc>,
-    pub slot: i64,
+    pub slot: BigDecimal,
     pub tx_sig: Option<String>,
-    pub delta: i64,
+    pub delta: BigDecimal,
 }
