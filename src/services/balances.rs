@@ -6,6 +6,7 @@ use crate::entities::token_accts::TokenAcct;
 use crate::entities::token_accts::TokenAcctStatus;
 use crate::entities::tokens;
 use crate::entities::transactions::Payload;
+use bigdecimal::BigDecimal;
 use chrono::Utc;
 use deadpool::managed::Object;
 use deadpool_diesel::Manager;
@@ -71,25 +72,26 @@ pub async fn handle_token_acct_change(
                 .filter(token_acct_balances::dsl::token_acct.eq(record_clone.token_acct.clone()))
                 .order_by(token_acct_balances::dsl::slot.desc())
                 .select(token_acct_balances::dsl::amount)
-                .first::<i64>(conn)
+                .first::<BigDecimal>(conn)
                 .optional()
         })
         .await??;
 
     let previous_balance = match previous_balance {
         Some(prev) => prev,
-        None => 0,
+        None => BigDecimal::from(0),
     };
 
-    let new_delta = new_amount - previous_balance;
+    let new_amnt_decimal = BigDecimal::from(new_amount);
+    let new_delta = BigDecimal::from(new_amount) - previous_balance;
 
     let new_balance = TokenAcctBalances {
         token_acct: record.token_acct.clone(),
         mint_acct: record.mint_acct.clone(),
         owner_acct: record.owner_acct.clone(),
-        amount: new_amount,
+        amount: new_amnt_decimal,
         delta: new_delta,
-        slot: ctx.slot as i64,
+        slot: BigDecimal::from(ctx.slot),
         created_at: Utc::now(),
         tx_sig: None,
     };
@@ -105,7 +107,7 @@ pub async fn handle_token_acct_change(
 
     let now = Utc::now();
     let mut token_balance: TokenAcct = record;
-    token_balance.amount = new_amount;
+    token_balance.amount = BigDecimal::from(new_amount);
     token_balance.updated_at = Some(now);
 
     conn_manager
@@ -115,7 +117,7 @@ pub async fn handle_token_acct_change(
                     .filter(token_accts::token_acct.eq(token_balance.token_acct.clone())),
             )
             .set((
-                token_accts::amount.eq(new_amount),
+                token_accts::amount.eq(BigDecimal::from(new_amount)),
                 token_accts::dsl::updated_at.eq(Utc::now()),
             ))
             .execute(conn)
@@ -190,7 +192,7 @@ pub async fn handle_token_acct_in_tx(
         let new_token_acct = TokenAcct {
             token_acct: token_account_str.clone(),
             owner_acct: authority_account_str.clone(),
-            amount: account_balance,
+            amount: BigDecimal::from(account_balance),
             status: TokenAcctStatus::Watching,
             mint_acct: mint_acct_value_str.clone(),
             updated_at: Some(Utc::now()),
@@ -223,9 +225,9 @@ pub async fn handle_token_acct_in_tx(
     transactions::handle_token_acct_balance_tx(
         conn_manager.clone(),
         token_account_str.clone(),
-        account_balance,
+        BigDecimal::from(account_balance),
         Some(transaction_sig_str),
-        transaction_payload.slot,
+        BigDecimal::from(transaction_payload.slot),
         mint_acct_value_str,
         authority_account_str,
     )
@@ -233,3 +235,4 @@ pub async fn handle_token_acct_in_tx(
 
     Ok(())
 }
+

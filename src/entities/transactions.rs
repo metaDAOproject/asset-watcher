@@ -7,11 +7,12 @@ use diesel::{
     sql_types::Text,
 };
 use serde::{Deserialize, Serialize};
+use bigdecimal::BigDecimal;
 
 table! {
     transactions (tx_sig) {
         tx_sig -> Varchar,
-        slot -> BigInt,
+        slot -> Numeric,
         block_time -> Timestamptz,
         failed -> Bool,
         payload -> Text,
@@ -24,7 +25,7 @@ table! {
 #[diesel(table_name = transactions)]
 pub struct Transaction {
     pub tx_sig: String,
-    pub slot: i64,
+    pub slot: BigDecimal,
     pub block_time: DateTime<Utc>,
     pub failed: bool,
     pub payload: String,
@@ -36,6 +37,7 @@ pub struct Transaction {
 #[sql_type = "Text"]
 pub enum InstructionType {
     VaultMintConditionalTokens,
+    VaultMintAndAmmSwap,
     AmmSwap,
     AmmDeposit,
     AmmWithdraw,
@@ -45,6 +47,7 @@ pub enum InstructionType {
     AutocratFinalizeProposal,
     VaultMergeConditionalTokens,
     VaultRedeemConditionalTokensForUnderlyingTokens,
+    VaultMintAndAMMSwap,
 }
 
 impl<DB> ToSql<Text, DB> for InstructionType
@@ -56,6 +59,9 @@ where
         match self {
             InstructionType::VaultMintConditionalTokens => {
                 "vault_mint_conditional_tokens".to_sql(out)
+            }
+            InstructionType::VaultMintAndAmmSwap => {
+                "vault_mint_and_amm_swap".to_sql(out)
             }
             InstructionType::AmmSwap => "amm_swap".to_sql(out),
             InstructionType::AmmDeposit => "amm_deposit".to_sql(out),
@@ -72,6 +78,9 @@ where
             InstructionType::VaultRedeemConditionalTokensForUnderlyingTokens => {
                 "vault_redeem_conditional_tokens_for_underlying_tokens".to_sql(out)
             }
+            InstructionType::VaultMintAndAMMSwap => {
+              "vault_mint_and_amm_swap".to_sql(out)
+          }
         }
     }
 }
@@ -80,6 +89,7 @@ impl FromSql<Text, Pg> for InstructionType {
     fn from_sql(bytes: PgValue<'_>) -> deserialize::Result<Self> {
         match bytes.as_bytes() {
             b"vault_mint_conditional_tokens" => Ok(InstructionType::VaultMintConditionalTokens),
+            b"vault_mint_and_amm_swap" => Ok(InstructionType::VaultMintAndAmmSwap),
             b"amm_swap" => Ok(InstructionType::AmmSwap),
             b"amm_deposit" => Ok(InstructionType::AmmDeposit),
             b"amm_withdraw" => Ok(InstructionType::AmmWithdraw),
@@ -88,6 +98,7 @@ impl FromSql<Text, Pg> for InstructionType {
             b"autocrat_initialize_proposal" => Ok(InstructionType::AutocratInitializeProposal),
             b"autocrat_finalize_proposal" => Ok(InstructionType::AutocratFinalizeProposal),
             b"vault_merge_conditional_tokens" => Ok(InstructionType::VaultMergeConditionalTokens),
+            b"vault_mint_and_amm_swap" => Ok(InstructionType::VaultMergeConditionalTokens),
             b"vault_redeem_conditional_tokens_for_underlying_tokens" => {
                 Ok(InstructionType::VaultRedeemConditionalTokensForUnderlyingTokens)
             }

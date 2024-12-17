@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use bigdecimal::BigDecimal;
 use chrono::Utc;
 use deadpool::managed::Object;
 use deadpool_diesel::Manager;
@@ -25,9 +26,9 @@ use crate::entities::transactions::Payload;
 pub async fn handle_token_acct_balance_tx(
     conn_manager: Arc<Object<Manager<PgConnection>>>,
     token_acct: String,
-    new_balance: i64,
+    new_balance: BigDecimal,
     transaction_sig: Option<String>,
-    slot: i64,
+    slot: BigDecimal,
     mint_acct: String,
     owner_acct: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -39,23 +40,27 @@ pub async fn handle_token_acct_balance_tx(
                 .filter(token_acct_balances::token_acct.eq(token_acct_clone_1))
                 .order(token_acct_balances::slot.desc())
                 .select(token_acct_balances::amount)
-                .first::<i64>(db)
+                .first::<BigDecimal>(db)
                 .optional()
         })
         .await??;
 
     let delta = match previous_balance {
-        Some(prev_amount) => new_balance - prev_amount,
-        None => new_balance,
+        Some(prev_amount) => new_balance.clone() - prev_amount,
+        None => new_balance.clone(),
     };
 
     let token_acct_clone_2 = token_acct.clone();
+    
+    let slot_dec = BigDecimal::from(slot.clone());
+    let slot_dec_clone = BigDecimal::from(slot.clone());    
+    
     let existing_balance_res = conn_manager
         .interact(move |db| {
             token_acct_balances::table
                 .filter(
                     token_acct_balances::slot
-                        .eq(slot)
+                        .eq(&slot_dec)
                         .and(token_acct_balances::token_acct.eq(token_acct_clone_2)),
                 )
                 .first::<TokenAcctBalances>(db)
@@ -63,7 +68,8 @@ pub async fn handle_token_acct_balance_tx(
         .await?;
 
     let maybe_balance = existing_balance_res.ok();
-
+    
+    
     if let Some(balance) = maybe_balance {
         if balance.tx_sig.is_none() {
             let token_acct_clone_3 = token_acct.clone();
@@ -74,7 +80,7 @@ pub async fn handle_token_acct_balance_tx(
                         token_acct_balances::table.filter(
                             token_acct_balances::token_acct
                                 .eq(token_acct_clone_3)
-                                .and(token_acct_balances::slot.eq(slot)),
+                                .and(token_acct_balances::slot.eq(&slot_dec_clone)),
                         ),
                     )
                     .set(token_acct_balances::tx_sig.eq(tx_sig_clone))
@@ -84,11 +90,12 @@ pub async fn handle_token_acct_balance_tx(
         }
         // already has the correct tx_sig, no need to update anything
     } else {
+        let new_balance_clone = new_balance.clone();
         let new_token_acct_balance = TokenAcctBalances {
             token_acct: token_acct.clone(),
             mint_acct: mint_acct,
             owner_acct: owner_acct,
-            amount: new_balance,
+            amount: BigDecimal::from(new_balance_clone),
             delta,
             slot: slot,
             tx_sig: transaction_sig,
@@ -106,13 +113,14 @@ pub async fn handle_token_acct_balance_tx(
 
     // Update the token_accts table with the new balance in the amount column
     let token_acct_clone_4 = token_acct.clone();
+    let new_balance_clone = new_balance.clone();
     conn_manager
         .interact(move |db| {
             diesel::update(
                 token_accts::table.filter(token_accts::token_acct.eq(token_acct_clone_4)),
             )
             .set((
-                token_accts::amount.eq(new_balance),
+                token_accts::amount.eq(new_balance_clone),
                 token_accts::dsl::updated_at.eq(Utc::now()),
             ))
             .execute(db)
@@ -132,6 +140,17 @@ pub fn find_instruction(
         .find(|instruction| instruction.name == instruction_name.to_string())
         .cloned()
         .ok_or_else(|| "Instruction not found".into())
+}
+
+pub fn find_user_account(
+    swap_instruction: &Instruction,
+) -> Result<String, Box<dyn std::error::Error>> {
+    swap_instruction
+        .accounts_with_data
+        .iter()
+        .find(|account| account.name == "user")
+        .map(|account| account.pubkey.clone())
+        .ok_or_else(|| "User account not found in swap instruction".into())
 }
 
 pub fn find_authority_account(
