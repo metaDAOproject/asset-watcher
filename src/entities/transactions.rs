@@ -116,7 +116,6 @@ pub struct Payload {
     pub compute_units_consumed: String,
     pub fee: String,
     pub signatures: Vec<String>,
-    pub version: String,
     pub log_messages: Vec<String>,
     pub accounts: Vec<Account>,
     pub instructions: Vec<Instruction>,
@@ -124,7 +123,7 @@ pub struct Payload {
 
 impl Payload {
     pub fn parse_payload(json_str: &str) -> Result<Payload, serde_json::Error> {
-        serde_json::from_str(json_str)
+      serde_json::from_str(json_str)
     }
     pub fn get_main_ix_type(&self) -> Option<InstructionType> {
         for ix in &self.instructions {
